@@ -21,6 +21,9 @@ class Settings(BaseSettings):
         "postgresql://postgres:postgres@localhost:5432/security_logs"
     )
 
+    # API Security Configuration
+    API_KEY: str = os.getenv("API_KEY", "soc-secret-api-key-2026")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

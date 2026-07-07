@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  postgres_db:
+    image: postgres:15-alpine
+    container_name: soc_postgres_db
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-security_logs}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-security_logs}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  fastapi_engine:
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    container_name: soc_fastapi_engine
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres_db:5432/${POSTGRES_DB:-security_logs}
+      API_KEY: ${API_KEY:-soc-secret-api-key-2026}
+      DEBUG: "True"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - ./backups:/app/backups
+
+  django_dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.django
+    container_name: soc_django_dashboard
+    restart: always
+    environment:
+      POSTGRES_SERVER: postgres_db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-security_logs}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-soc-dashboard-secret-key-enterprise-mvp-2026}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      DEBUG: "True"
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      fastapi_engine:
+        condition: service_started
+    volumes:
+      - ./web_dashboard:/app/web_dashboard
+      - ./app:/app/app
+
+volumes:
+  postgres_data:
+    driver: local

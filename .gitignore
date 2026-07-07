@@ -66,6 +66,7 @@ venv.bak/
 
 # Datasets and raw files
 datasets/raw/
+backups/
 *.csv
 *.log
 *.sql.gz
