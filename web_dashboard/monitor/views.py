@@ -2,7 +2,14 @@ import json
 import logging
 import os
 import re
+from pathlib import Path
+from dotenv import load_dotenv
 from datetime import timedelta
+
+# Explicitly load .env from project root to guarantee GEMINI_API_KEY availability
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+load_dotenv(BASE_DIR / ".env")
+load_dotenv()
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -216,13 +223,13 @@ def chatbot_api(request):
 
     log_context_str = "\n".join(log_context_lines)
 
-    # 3. Check for Gemini API Key
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    # 3. Check for Gemini API Key and Configure Model
+    api_key = os.getenv("GEMINI_API_KEY")
     
-    if GENAI_AVAILABLE and api_key and api_key != "your_gemini_api_key_here":
+    if GENAI_AVAILABLE and api_key and api_key not in ("your_gemini_api_key_here", "your_google_gemini_api_key_here", ""):
         try:
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel('gemini-2.5-flash')
             
             system_prompt = (
                 "You are a Cybersecurity SOC Assistant. Analyze these logs and provide mitigation recommendations in Indonesian. "
@@ -244,7 +251,18 @@ def chatbot_api(request):
                 "mode": "gemini-live"
             })
         except Exception as e:
-            logger.error(f"Gemini API call failed: {e}. Falling back to simulation mode.")
+            # TASK 3: Expose the Actual Error explicitly to terminal and logger
+            print(f"\n=======================================================")
+            print(f"[❌ GEMINI API ERROR]: {str(e)}")
+            print(f"=======================================================\n")
+            logger.error(f"Gemini API Error: {str(e)}", exc_info=True)
+    else:
+        if not GENAI_AVAILABLE:
+            print("\n[⚠️ GEMINI API WARNING]: Package google-generativeai is not installed or failed to import.\n")
+            logger.warning("google-generativeai package not available.")
+        else:
+            print(f"\n[⚠️ GEMINI API WARNING]: GEMINI_API_KEY is missing or set to placeholder in .env (Value: '{api_key}').\n")
+            logger.warning(f"GEMINI_API_KEY missing or invalid: '{api_key}'")
 
     # 4. Graceful Simulation Fallback (when API key is missing or quota exceeded)
     ip_display = target_ip if target_ip else "103.179.248.11 (Default Sample IP)"
