@@ -17,18 +17,25 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from app.core.database import SessionLocal, init_db
-from app.models.logs import PaloAltoLog
+from app.models.logs import PaloAltoLog, FortinetLog, FortiWafLog
 from app.repositories.log_repository import LogRepository
-from app.services.data_cleaner import clean_log_record
+from app.services.data_cleaner import clean_log_record, classify_log_vendor
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("seeder")
 
 DATASET_PATH = Path("datasets/raw/firewall_log.csv")
 PARENT_FALLBACK_DATASET = Path("../03_05_2026-LogRhythm_WebLogsExport (1).csv")
-SAMPLE_SIZE = 5000
+SAMPLE_SIZE = 10000
 CHUNK_SIZE = 10000
 BATCH_INSERT_SIZE = 1000
+
+# Set to True jika ingin membagi rata data sampel ke 3 tabel (Palo Alto, Fortinet, FortiWAF)
+# untuk keperluan demo & pengujian lokal saat menggunakan dataset CSV yang hanya berisi 1 vendor.
+SIMULATE_MULTI_VENDOR = True
+
+# Set to True jika ingin mengosongkan/membersihkan tabel log sebelum melakukan seeding baru
+CLEAR_EXISTING_DATA = True
 
 
 def prepare_dataset_file() -> bool:
@@ -73,8 +80,34 @@ def seed_database():
     logger.info("Initializing database tables...")
     init_db()
 
-    # 3. Read first chunk using pandas (chunksize=10000) to prevent RAM overload
-    logger.info(f"Reading CSV dataset ({DATASET_PATH}) with chunksize={CHUNK_SIZE}...")
+    # 2.5 Clear existing data if flag is set to keep database clean
+    if CLEAR_EXISTING_DATA:
+        logger.info("Clearing existing data from firewall log tables (TRUNCATE)...")
+        db_clear = SessionLocal()
+        try:
+            from sqlalchemy import text
+            db_clear.execute(text("TRUNCATE TABLE palo_alto_logs, fortinet_logs, fortiwaf_logs RESTART IDENTITY CASCADE;"))
+            db_clear.commit()
+            logger.info("Database tables truncated successfully.")
+        except Exception as e:
+            db_clear.rollback()
+            logger.warning(f"Truncate failed: {e}. Falling back to DELETE...")
+            try:
+                db_clear.query(PaloAltoLog).delete()
+                db_clear.query(FortinetLog).delete()
+                db_clear.query(FortiWafLog).delete()
+                db_clear.commit()
+                logger.info("Database tables cleared using DELETE successfully.")
+            except Exception as delete_err:
+                db_clear.rollback()
+                logger.error(f"Failed to clear tables: {delete_err}")
+        finally:
+            db_clear.close()
+
+    # 3. Read dataset using pandas with chunksize to prevent RAM overload, looping until SAMPLE_SIZE is gathered
+    logger.info(f"Reading CSV dataset ({DATASET_PATH}) in chunks of {CHUNK_SIZE} until gathering {SAMPLE_SIZE} records...")
+    chunks = []
+    total_loaded = 0
     try:
         csv_reader = pd.read_csv(
             DATASET_PATH,
@@ -83,36 +116,71 @@ def seed_database():
             keep_default_na=False,
             low_memory=False,
         )
-        first_chunk = next(csv_reader)
-        logger.info(f"Successfully loaded first chunk of {len(first_chunk)} rows into memory.")
+        for chunk in csv_reader:
+            chunks.append(chunk)
+            total_loaded += len(chunk)
+            logger.info(f"Loaded chunk of {len(chunk)} rows. Total in memory: {total_loaded}")
+            if total_loaded >= SAMPLE_SIZE:
+                break
+
+        if not chunks:
+            logger.error("No data could be read from the CSV file.")
+            return
+
+        combined_df = pd.concat(chunks)
+        sample_df = combined_df.head(SAMPLE_SIZE)
+        logger.info(f"Successfully loaded and concatenated {len(sample_df)} total sample rows into memory.")
     except Exception as e:
         logger.error(f"Error reading CSV file {DATASET_PATH}: {e}")
         return
 
-    # 4. Extract first 5,000 rows as sample
-    sample_df = first_chunk.head(SAMPLE_SIZE)
-    logger.info(f"Extracted sample of {len(sample_df)} rows for Data Type Conversion & Ingestion.")
 
     # 5. Apply Data Type Conversion utility from Service layer
     logger.info("Applying Data Type Conversion utility (cleaning empty strings & scientific notation dates)...")
     raw_records = sample_df.to_dict(orient="records")
     cleaned_records = [clean_log_record(row) for row in raw_records]
 
-    # 6. Bulk insert into palo_alto_logs table
+    # 6. Group by vendor & bulk insert into multi-vendor firewall tables
     db = SessionLocal()
     repo = LogRepository(db)
     total_inserted = 0
 
     try:
-        logger.info(f"Beginning bulk insertion into {PaloAltoLog.__tablename__} in batches of {BATCH_INSERT_SIZE}...")
-        for i in range(0, len(cleaned_records), BATCH_INSERT_SIZE):
-            batch = cleaned_records[i : i + BATCH_INSERT_SIZE]
-            repo.bulk_insert_logs(PaloAltoLog, batch)
-            total_inserted += len(batch)
-            # Terminal feedback / logging as required by prompt
-            print(f"--> [SEEDER PROGRESS] Inserted {total_inserted} / {len(cleaned_records)} rows into the database...")
+        logger.info("Classifying records by vendor (Palo Alto, Fortinet, FortiWAF)...")
+        vendor_batches = {
+            "palo_alto": [],
+            "fortinet": [],
+            "fortiwaf": []
+        }
 
-        logger.info(f"=== Seeding Complete! Successfully inserted {total_inserted} rows into {PaloAltoLog.__tablename__} ===")
+        # Jika SIMULATE_MULTI_VENDOR aktif dan dataset hanya dari 1 vendor, bagi rata ke 3 tabel untuk demo lokal
+        vendors_list = ["palo_alto", "fortinet", "fortiwaf"]
+        for idx, record in enumerate(cleaned_records):
+            if SIMULATE_MULTI_VENDOR:
+                vendor = vendors_list[idx % 3]
+                # Override log_source agar selaras dengan tabel tujuan simulasi
+                record["log_source"] = f"10.14.202.200 {vendor.upper()} Firewall"
+            else:
+                vendor = classify_log_vendor(record)
+            vendor_batches[vendor].append(record)
+
+        for vendor_key, records_batch in vendor_batches.items():
+            if not records_batch:
+                logger.info(f"--> [SEEDER SKIP] 0 records detected for vendor '{vendor_key}'.")
+                continue
+
+            model_class = repo.get_model_by_vendor(vendor_key)
+            logger.info(f"Beginning bulk insertion into {model_class.__tablename__} ({len(records_batch)} records) in batches of {BATCH_INSERT_SIZE}...")
+            
+            inserted_for_vendor = 0
+            for i in range(0, len(records_batch), BATCH_INSERT_SIZE):
+                batch = records_batch[i : i + BATCH_INSERT_SIZE]
+                repo.bulk_insert_logs(model_class, batch)
+                inserted_for_vendor += len(batch)
+                total_inserted += len(batch)
+                print(f"--> [SEEDER PROGRESS - {vendor_key.upper()}] Inserted {inserted_for_vendor} / {len(records_batch)} rows into {model_class.__tablename__}...")
+
+        logger.info(f"=== Seeding Complete! Successfully inserted {total_inserted} total rows across vendor tables ===")
     except Exception as e:
         logger.error(f"Database insertion failed during seeding: {e}")
     finally:

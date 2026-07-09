@@ -149,3 +149,26 @@ def clean_log_record(row_dict: Dict[str, Any]) -> Dict[str, Any]:
         "log_source": str(log_source) if log_source else None,
         "additional_data": additional_data,
     }
+
+
+def classify_log_vendor(cleaned_record: Dict[str, Any]) -> str:
+    """
+    Vendor Classification Engine:
+    Inspects log_source and additional_data fields to determine the target vendor table
+    ('palo_alto', 'fortinet', or 'fortiwaf').
+    """
+    log_source = str(cleaned_record.get("log_source") or "").lower()
+    additional_data = cleaned_record.get("additional_data") or {}
+
+    vendor_info = str(additional_data.get("Vendor Info") or additional_data.get("vendor_info") or "").lower()
+    device_name = str(additional_data.get("Device Name") or additional_data.get("device_name") or "").lower()
+    combined_info = f"{log_source} {vendor_info} {device_name}"
+
+    if any(k in combined_info for k in ("fortiwaf", "forti_waf", "waf", "web application firewall")):
+        return "fortiwaf"
+    elif any(k in combined_info for k in ("fortinet", "fortigate", "fortios", "forti")):
+        return "fortinet"
+    else:
+        # Default fallback to palo_alto
+        return "palo_alto"
+

@@ -1,5 +1,7 @@
 # 🛡️ AI-Powered Long-Running Cyber Attack Detection System (CNN-LSTM)
 
+[🇮🇩 Baca dalam Bahasa Indonesia](README.id.md)
+
 An enterprise-grade, full-stack cybersecurity defense platform engineered to detect subtle, low-and-slow **Long-Running Cyber Attacks** across multi-vendor network perimeters. By leveraging a hybrid deep learning architecture (**CNN-LSTM**) coupled with a decoupled microservices design, this system delivers real-time threat ingestion, behavioral analysis, Role-Based Access Control (RBAC) monitoring, and generative AI mitigation counseling.
 
 ---
