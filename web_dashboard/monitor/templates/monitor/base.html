@@ -1,47 +1,37 @@
 <!DOCTYPE html>
-<html lang="id" class="dark">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}CyberSOC Enterprise Dashboard{% endblock %}</title>
+    <title>{% block title %}PLN Security - System Monitoring & Gate Authentication{% endblock %}</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts: Outfit -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Custom Tailwind Configuration & Vanilla CSS -->
     <script>
         tailwind.config = {
-            darkMode: 'class',
             theme: {
                 extend: {
                     fontFamily: {
                         sans: ['Outfit', 'sans-serif'],
                     },
                     colors: {
+                        pln: {
+                            blue: '#13387e',
+                            darkblue: '#0c2350',
+                            light: '#f8fafc',
+                            yellow: '#fbc02d',
+                            yellowhover: '#f59e0b',
+                        },
                         slate: {
                             850: '#151f32',
                             900: '#0f172a',
                             950: '#090d16',
-                        },
-                        cyber: {
-                            emerald: '#10b981',
-                            cyan: '#06b6d4',
-                            violet: '#8b5cf6',
-                            rose: '#f43f5e',
-                        }
-                    },
-                    animation: {
-                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                        'glow': 'glow 3s ease-in-out infinite alternate',
-                    },
-                    keyframes: {
-                        glow: {
-                            '0%': { boxShadow: '0 0 15px -3px rgba(16, 185, 129, 0.3)' },
-                            '100%': { boxShadow: '0 0 25px 2px rgba(6, 182, 212, 0.5)' },
                         }
                     }
                 }
@@ -51,53 +41,89 @@
     <style>
         body {
             font-family: 'Outfit', sans-serif;
-            background-color: #090d16;
-            color: #e2e8f0;
+            background-color: #f8fafc;
+            color: #1e293b;
             overflow-x: hidden;
         }
-        /* Custom scrollbar for cyber aesthetic */
+        /* Custom scrollbar for clean corporate aesthetic */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
         }
         ::-webkit-scrollbar-track {
-            background: #0f172a;
+            background: #f1f5f9;
         }
         ::-webkit-scrollbar-thumb {
-            background: #334155;
+            background: #cbd5e1;
             border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #10b981;
+            background: #13387e;
         }
-        .glass-panel {
-            background: rgba(15, 23, 42, 0.75);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(51, 65, 85, 0.6);
+        /* PLN Component Utilities */
+        .sidebar-pln {
+            background-color: #13387e;
+            color: #ffffff;
         }
-        .glass-card {
-            background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(51, 65, 85, 0.5);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        .sidebar-pln-dark {
+            background: linear-gradient(180deg, #0a1936 0%, #050d1e 100%);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            color: #ffffff;
         }
-        .glass-card:hover {
-            transform: translateY(-3px);
-            border-color: rgba(16, 185, 129, 0.5);
-            box-shadow: 0 10px 30px -10px rgba(16, 185, 129, 0.2);
+        #appSidebar.sidebar-collapsed {
+            width: 4.75rem !important;
         }
-        .gradient-text {
-            background: linear-gradient(135deg, #34d399 0%, #22d3ee 50%, #818cf8 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+        #appSidebar.sidebar-collapsed .sidebar-text {
+            display: none !important;
+        }
+        #appSidebar.sidebar-collapsed .sidebar-logo-text {
+            display: none !important;
+        }
+        #appSidebar.sidebar-collapsed .p-6 {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+            justify-content: center !important;
+        }
+        #appSidebar.sidebar-collapsed nav {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+        #appSidebar.sidebar-collapsed nav a,
+        #appSidebar.sidebar-collapsed nav button {
+            justify-content: center !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+        #appSidebar.sidebar-collapsed .sidebar-footer-text {
+            display: none !important;
+        }
+        .card-pln {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
+        .btn-pln-yellow {
+            background-color: #fbc02d;
+            color: #0f172a;
+            font-weight: 700;
+            transition: all 0.2s ease;
+        }
+        .btn-pln-yellow:hover {
+            background-color: #f59e0b;
+            box-shadow: 0 4px 12px rgba(251, 192, 45, 0.3);
+        }
+        .badge-pln-active {
+            background-color: #fbc02d;
+            color: #0f172a;
+            font-weight: 700;
         }
         .typing-dot {
             display: inline-block;
             width: 6px;
             height: 6px;
             border-radius: 50%;
-            background-color: #34d399;
+            background-color: #13387e;
             animation: typing 1.4s infinite ease-in-out both;
         }
         .typing-dot:nth-child(1) { animation-delay: -0.32s; }
@@ -109,98 +135,234 @@
     </style>
     {% block extra_head %}{% endblock %}
 </head>
-<body class="min-h-screen flex flex-col selection:bg-emerald-500 selection:text-slate-950">
-    <!-- Ambient Background Gradients -->
-    <div class="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        <div class="absolute -top-40 -left-40 w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl animate-pulse-slow"></div>
-        <div class="absolute top-1/3 -right-40 w-96 h-96 bg-cyan-600/10 rounded-full blur-3xl animate-pulse-slow" style="animation-delay: 2s;"></div>
-        <div class="absolute -bottom-40 left-1/3 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl animate-pulse-slow" style="animation-delay: 4s;"></div>
-    </div>
-
-    <!-- Navigation Bar -->
+<body class="min-h-screen flex selection:bg-amber-300 selection:text-slate-900 bg-slate-50">
     {% if user.is_authenticated %}
-    <header class="sticky top-0 z-40 glass-panel border-b border-slate-800 px-6 py-4">
-        <div class="max-w-7xl mx-auto flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 p-0.5 shadow-lg shadow-emerald-500/20 flex items-center justify-center">
-                    <div class="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-                        <svg class="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+    {% block sidebar %}
+    <!-- Left Sidebar (PLN Blue) -->
+    <!-- Left Sidebar (Dark PLN Executive Navy) -->
+    <aside id="appSidebar" class="w-64 sidebar-pln-dark flex-shrink-0 flex flex-col justify-between hidden md:flex transition-all duration-300 z-30 shadow-2xl min-h-screen">
+        <div>
+            <!-- Sidebar Header / Logo -->
+            <div class="p-6 border-b border-white/10 flex items-center justify-between">
+                <div class="flex items-center space-x-3 overflow-hidden">
+                    <div class="w-10 h-10 rounded-xl bg-white text-pln-blue flex items-center justify-center shadow-md flex-shrink-0">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
                         </svg>
                     </div>
-                </div>
-                <div>
-                    <span class="text-xl font-bold tracking-tight text-white">Antigravity <span class="gradient-text">SOC Pulse</span></span>
-                    <span class="hidden sm:inline-block ml-2 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full">Enterprise AI v2.0</span>
+                    <div class="sidebar-logo-text">
+                        <h2 class="font-black text-lg tracking-tight leading-tight text-white">PLN Security</h2>
+                        <p class="text-[11px] text-blue-300 uppercase tracking-wider font-semibold">Monitoring System</p>
+                    </div>
                 </div>
             </div>
 
-            <div class="flex items-center space-x-4">
-                <!-- Role Badge -->
-                <div class="hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/60 text-xs">
-                    <span class="w-2 h-2 rounded-full {% if user.is_superuser %}bg-rose-500 animate-ping{% else %}bg-emerald-500{% endif %}"></span>
-                    <span class="text-slate-400">Role:</span>
-                    <span class="font-semibold text-white">{% if user.is_superuser %}Administrator{% else %}SOC Analyst (Staff){% endif %}</span>
-                </div>
-
-                {% if user.is_superuser %}
-                <a href="/admin/" target="_blank" class="px-3 py-1.5 text-xs font-medium text-cyan-400 hover:text-cyan-300 bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-800/60 rounded-lg transition-all flex items-center space-x-1">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
-                    <span>Admin Panel</span>
-                </a>
-                {% endif %}
-
-                <!-- User Profile & Logout -->
-                <div class="flex items-center space-x-3 border-l border-slate-800 pl-4">
-                    <div class="text-right hidden sm:block">
-                        <div class="text-sm font-medium text-slate-200">{{ user.username }}</div>
-                        <div class="text-[11px] text-slate-500">Active Monitoring</div>
-                    </div>
-                    <a href="{% url 'logout' %}" class="p-2 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/40 transition-all shadow-sm" title="Logout">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                        </svg>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </header>
-    {% endif %}
-
-    <!-- Main Content Area -->
-    <main class="flex-1 relative z-10 {% if user.is_authenticated %}max-w-7xl mx-auto px-4 sm:px-6 py-8 w-full{% else %}flex items-center justify-center p-4{% endif %}">
-        {% if messages %}
-        <div class="mb-6 space-y-2">
-            {% for message in messages %}
-            <div class="p-4 rounded-xl border flex items-center justify-between {% if message.tags == 'error' %}bg-rose-950/60 border-rose-800 text-rose-200{% elif message.tags == 'success' %}bg-emerald-950/60 border-emerald-800 text-emerald-200{% else %}bg-cyan-950/60 border-cyan-800 text-cyan-200{% endif %} backdrop-blur-md shadow-lg animate-fade-in">
-                <div class="flex items-center space-x-3">
+            <!-- Navigation Links -->
+            <nav class="p-4 space-y-2">
+                <a href="{% url 'dashboard' %}" class="flex items-center space-x-3 px-4 py-3 rounded-xl font-bold transition-all {% if request.path == '/' or 'dashboard' in request.path %}badge-pln-active shadow-md{% else %}text-blue-100 hover:bg-white/10{% endif %}">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                     </svg>
-                    <span class="text-sm font-medium">{{ message }}</span>
-                </div>
-                <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white">&times;</button>
-            </div>
-            {% endfor %}
+                    <span class="sidebar-text">System Monitoring</span>
+                </a>
+
+                <a href="{% url 'investigation_dashboard' %}" class="flex items-center space-x-3 px-4 py-3 rounded-xl font-bold transition-all {% if 'investigation' in request.path %}badge-pln-active shadow-md{% else %}text-blue-100 hover:bg-white/10{% endif %}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <span class="sidebar-text">Chatbot AI</span>
+                </a>
+
+                <!-- {% if user.is_superuser %}
+                <a href="{% url 'user_management' %}" class="flex items-center space-x-3 px-4 py-3 rounded-xl font-semibold transition-all {% if 'users' in request.path %}badge-pln-active shadow-md{% else %}text-blue-100 hover:bg-white/10{% endif %}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                    </svg>
+                    <span class="sidebar-text">User Management</span>
+                </a>
+                {% endif %} -->
+            </nav>
         </div>
+
+        <!-- Sidebar Footer -->
+        <div class="p-6 border-t border-white/10 text-xs text-blue-300/80 font-medium flex flex-col space-y-1">
+            <span class="sidebar-footer-text">&copy; 2026 PLN Security</span>
+            <span class="sidebar-footer-text text-[10px] text-blue-400">Multi-Actor Gate Defense v2.0</span>
+            <span class="hidden sidebar-logo-text text-[10px] text-blue-400 text-center">&copy; PLN</span>
+        </div>
+    </aside>
+    {% endblock sidebar %}
+
+    <!-- Main Wrapper -->
+    <div class="flex-1 flex flex-col min-h-screen overflow-x-hidden">
+        {% block topbar %}
+        <!-- Top Navbar (PLN Blue header bar) -->
+        <header class="sidebar-pln px-6 py-3.5 flex items-center justify-between shadow-md sticky top-0 z-20">
+            <div class="flex items-center space-x-4">
+                <!-- Hamburger Button (Universal Toggle for both Mobile & Desktop) -->
+                <button onclick="toggleSidebar()" class="p-2 rounded-lg hover:bg-blue-800 text-white focus:outline-none transition-all flex items-center justify-center" title="Toggle Sidebar">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm font-bold tracking-wide uppercase text-blue-100">SYSTEM ADMINISTRATION</span>
+                </div>
+            </div>
+
+            <!-- Right Navbar Controls -->
+            <div class="flex items-center space-x-4">
+                <!-- Notification Bell -->
+                <div class="relative">
+                    <button class="p-2 rounded-full hover:bg-blue-800 text-white transition-all relative">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                        </svg>
+                        <span class="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border border-pln-blue">3</span>
+                    </button>
+                </div>
+
+                <!-- Role Badge -->
+                <div class="hidden sm:flex items-center px-3 py-1 bg-blue-800/80 border border-blue-700 rounded-full text-xs font-semibold text-white">
+                    <span>Role: {% if user.is_superuser %}Super Admin{% else %}SOC Analyst{% endif %}</span>
+                </div>
+
+                <!-- User Account Info with Dropdown & Logout -->
+                <div class="relative inline-block text-left" id="userDropdownContainer">
+                    <button id="userDropdownBtn" onclick="toggleUserDropdown(event)" class="flex items-center space-x-2 p-1.5 rounded-full hover:bg-blue-800/80 transition-all focus:outline-none border border-transparent hover:border-blue-700">
+                        <div class="w-8 h-8 rounded-full bg-amber-400 text-slate-900 font-black flex items-center justify-center text-xs shadow-md">
+                            {{ user.username|slice:":2"|upper }}
+                        </div>
+                        <svg class="w-4 h-4 text-blue-200 hidden sm:block transition-transform duration-200" id="userDropdownArrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+
+                    <!-- Dropdown Menu -->
+                    <div id="userDropdown" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2 z-50 animate-fade-in text-slate-800">
+                        <div class="px-4 py-3 border-b border-slate-100">
+                            <p class="text-xs font-medium text-slate-500">Signed in as</p>
+                            <p class="text-sm font-black text-slate-900 truncate">{{ user.username }}</p>
+                            <span class="inline-block mt-1 px-2 py-0.5 bg-blue-50 text-pln-blue text-[10px] font-bold rounded-full border border-blue-200">
+                                {% if user.is_superuser %}Super Admin{% else %}SOC Analyst{% endif %}
+                            </span>
+                        </div>
+
+                        <div class="py-1">
+                            <a href="{% url 'dashboard' %}" class="flex items-center space-x-2.5 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-pln-blue transition-colors">
+                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+                                </svg>
+                                <span>System Dashboard</span>
+                            </a>
+                            {% if user.is_superuser %}
+                            <a href="{% url 'user_management' %}" class="flex items-center space-x-2.5 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-pln-blue transition-colors">
+                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                </svg>
+                                <span>User Management</span>
+                            </a>
+                            {% endif %}
+                        </div>
+
+                        <div class="border-t border-slate-100 py-1">
+                            <!-- Logout Button (moved into dropdown) -->
+                            <a href="{% url 'logout' %}" class="flex items-center space-x-2.5 px-4 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors">
+                                <svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                                </svg>
+                                <span>Keluar / Logout</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+        {% endblock topbar %}
+
         {% endif %}
 
-        {% block content %}{% endblock %}
-    </main>
+        <!-- Content Area -->
+        <main class="flex-1 {% if user.is_authenticated %}p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto{% else %}w-full min-h-screen flex items-center justify-center p-4{% endif %}">
+            {% if messages %}
+            <div class="mb-6 space-y-2">
+                {% for message in messages %}
+                <div class="p-4 rounded-xl border flex items-center justify-between {% if message.tags == 'error' %}bg-red-50 border-red-300 text-red-800{% elif message.tags == 'success' %}bg-emerald-50 border-emerald-300 text-emerald-800{% else %}bg-blue-50 border-blue-300 text-blue-800{% endif %} shadow-sm animate-fade-in">
+                    <div class="flex items-center space-x-3">
+                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span class="text-sm font-semibold">{{ message }}</span>
+                    </div>
+                    <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-slate-700">&times;</button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
 
-    <!-- Footer -->
-    <footer class="relative z-10 border-t border-slate-800/80 py-6 text-center text-xs text-slate-500 bg-slate-950/60 backdrop-blur-md">
-        <div class="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div class="flex items-center space-x-2">
-                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>System Status: <strong class="text-emerald-400">Online & Synchronized</strong> with FastAPI Engine</span>
-            </div>
-            <div>
-                &copy; 2026 Antigravity Cybersecurity Defense System. Built with Django & Google Gemini AI.
-            </div>
-        </div>
-    </footer>
+            {% block content %}{% endblock %}
+        </main>
+
+        {% if user.is_authenticated %}
+    </div>
+    {% endif %}
 
     {% block extra_scripts %}{% endblock %}
+
+    <script>
+        // Toggle Sidebar (Collapsible Dark Sidebar logic)
+        function toggleSidebar() {
+            const sidebar = document.getElementById("appSidebar");
+            if (!sidebar) return;
+
+            if (window.innerWidth < 768) {
+                // Mobile behavior: toggle hidden
+                sidebar.classList.toggle("hidden");
+            } else {
+                // Desktop behavior: toggle collapsed state
+                sidebar.classList.toggle("sidebar-collapsed");
+                // Save state to localStorage for persistence across page navigations
+                const isCollapsed = sidebar.classList.contains("sidebar-collapsed");
+                localStorage.setItem("pln_sidebar_collapsed", isCollapsed ? "true" : "false");
+            }
+        }
+
+        // Restore sidebar state on load
+        document.addEventListener("DOMContentLoaded", () => {
+            const sidebar = document.getElementById("appSidebar");
+            if (sidebar && window.innerWidth >= 768) {
+                if (localStorage.getItem("pln_sidebar_collapsed") === "true") {
+                    sidebar.classList.add("sidebar-collapsed");
+                }
+            }
+        });
+
+        // Toggle User Profile Dropdown
+        function toggleUserDropdown(event) {
+            if (event) event.stopPropagation();
+            const dropdown = document.getElementById("userDropdown");
+            const arrow = document.getElementById("userDropdownArrow");
+            if (dropdown) {
+                dropdown.classList.toggle("hidden");
+                if (arrow) {
+                    arrow.classList.toggle("rotate-180");
+                }
+            }
+        }
+
+        // Close dropdown when clicking outside
+        window.addEventListener("click", function(event) {
+            const dropdown = document.getElementById("userDropdown");
+            const container = document.getElementById("userDropdownContainer");
+            const arrow = document.getElementById("userDropdownArrow");
+            if (dropdown && !dropdown.classList.contains("hidden")) {
+                if (container && !container.contains(event.target)) {
+                    dropdown.classList.add("hidden");
+                    if (arrow) arrow.classList.remove("rotate-180");
+                }
+            }
+        });
+    </script>
 </body>
 </html>

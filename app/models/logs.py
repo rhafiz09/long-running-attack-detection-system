@@ -25,7 +25,19 @@ class BaseLogModel(Base):
     zone_impacted = Column(String(100), index=True, nullable=True)
     log_source = Column(String(255), index=True, nullable=True)
     
-    # Dynamic schema scalability for remaining 100+ flexible CSV columns
+    # Core columns explicitly mapped for SOC Monitoring & Frontend Investigation Dashboard
+    port_origin = Column(Integer, index=True, nullable=True)
+    protocol = Column(String(50), index=True, nullable=True)
+    action = Column(String(100), index=True, nullable=True)
+    severity = Column(String(50), index=True, nullable=True)
+    threat_name = Column(String(255), index=True, nullable=True)
+    application = Column(String(100), index=True, nullable=True)
+    country_origin = Column(String(100), nullable=True)
+    country_impacted = Column(String(100), nullable=True)
+    rule_name = Column(String(255), nullable=True)
+    classification = Column(String(255), index=True, nullable=True)
+    
+    # Dynamic schema scalability for remaining ~80+ flexible CSV columns
     additional_data = Column(JSONB, nullable=False, default=dict)
 
 

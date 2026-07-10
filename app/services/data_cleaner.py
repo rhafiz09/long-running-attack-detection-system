@@ -119,6 +119,29 @@ def clean_log_record(row_dict: Dict[str, Any]) -> Dict[str, Any]:
         row_dict.get("Log Source") or row_dict.get("log_source")
     )
 
+    # Clean port origin (convert string integer to int if possible)
+    port_ori_val = clean_empty_string(
+        row_dict.get("TCP/UDP Port (Origin)") or row_dict.get("port_origin")
+    )
+    port_origin = None
+    if port_ori_val is not None:
+        try:
+            port_origin = int(float(port_ori_val))
+            if port_origin < 0 or port_origin > 65535:
+                port_origin = None
+        except (ValueError, TypeError):
+            port_origin = None
+
+    protocol = clean_empty_string(row_dict.get("Protocol") or row_dict.get("protocol"))
+    action = clean_empty_string(row_dict.get("Action") or row_dict.get("action"))
+    severity = clean_empty_string(row_dict.get("Severity") or row_dict.get("severity"))
+    threat_name = clean_empty_string(row_dict.get("Threat Name") or row_dict.get("threat_name"))
+    application = clean_empty_string(row_dict.get("Application") or row_dict.get("application"))
+    country_origin = clean_empty_string(row_dict.get("Country (Origin)") or row_dict.get("country_origin"))
+    country_impacted = clean_empty_string(row_dict.get("Country (Impacted)") or row_dict.get("country_impacted"))
+    rule_name = clean_empty_string(row_dict.get("Policy") or row_dict.get("Rule Name") or row_dict.get("MPE Rule Name") or row_dict.get("rule_name"))
+    classification = clean_empty_string(row_dict.get("Classification") or row_dict.get("classification"))
+
     # Identify core keys to exclude from additional_data
     core_headers = {
         "Log Date", "log_date",
@@ -128,10 +151,20 @@ def clean_log_record(row_dict: Dict[str, Any]) -> Dict[str, Any]:
         "Zone (Origin)", "zone_origin",
         "Zone (Impacted)", "zone_impacted",
         "Log Source", "log_source",
+        "TCP/UDP Port (Origin)", "port_origin",
+        "Protocol", "protocol",
+        "Action", "action",
+        "Severity", "severity",
+        "Threat Name", "threat_name",
+        "Application", "application",
+        "Country (Origin)", "country_origin",
+        "Country (Impacted)", "country_impacted",
+        "Policy", "Rule Name", "MPE Rule Name", "rule_name",
+        "Classification", "classification",
         "id"
     }
 
-    # Collect all remaining 100+ flexible columns into additional_data
+    # Collect all remaining ~80+ flexible columns into additional_data
     additional_data: Dict[str, Any] = {}
     for key, value in row_dict.items():
         if key not in core_headers:
@@ -147,6 +180,16 @@ def clean_log_record(row_dict: Dict[str, Any]) -> Dict[str, Any]:
         "zone_origin": str(zone_origin) if zone_origin else None,
         "zone_impacted": str(zone_impacted) if zone_impacted else None,
         "log_source": str(log_source) if log_source else None,
+        "port_origin": port_origin,
+        "protocol": str(protocol) if protocol else None,
+        "action": str(action) if action else None,
+        "severity": str(severity) if severity else None,
+        "threat_name": str(threat_name) if threat_name else None,
+        "application": str(application) if application else None,
+        "country_origin": str(country_origin) if country_origin else None,
+        "country_impacted": str(country_impacted) if country_impacted else None,
+        "rule_name": str(rule_name) if rule_name else None,
+        "classification": str(classification) if classification else None,
         "additional_data": additional_data,
     }
 
@@ -156,19 +199,21 @@ def classify_log_vendor(cleaned_record: Dict[str, Any]) -> str:
     Vendor Classification Engine:
     Inspects log_source and additional_data fields to determine the target vendor table
     ('palo_alto', 'fortinet', or 'fortiwaf').
+    Works whether passed raw CSV dictionaries ('Log Source') or cleaned dictionaries ('log_source').
     """
-    log_source = str(cleaned_record.get("log_source") or "").lower()
-    additional_data = cleaned_record.get("additional_data") or {}
+    log_source = str(cleaned_record.get("log_source") or cleaned_record.get("Log Source") or "").lower()
+    additional_data = cleaned_record.get("additional_data") if isinstance(cleaned_record.get("additional_data"), dict) else {}
 
-    vendor_info = str(additional_data.get("Vendor Info") or additional_data.get("vendor_info") or "").lower()
-    device_name = str(additional_data.get("Device Name") or additional_data.get("device_name") or "").lower()
+    vendor_info = str(additional_data.get("Vendor Info") or additional_data.get("vendor_info") or cleaned_record.get("Vendor Info") or cleaned_record.get("vendor_info") or "").lower()
+    device_name = str(additional_data.get("Device Name") or additional_data.get("device_name") or cleaned_record.get("Device Name") or cleaned_record.get("device_name") or "").lower()
     combined_info = f"{log_source} {vendor_info} {device_name}"
 
-    if any(k in combined_info for k in ("fortiwaf", "forti_waf", "waf", "web application firewall")):
+    if any(k in combined_info for k in ("fortiwaf", "forti_waf", "waf-", "waf ", "web application firewall")):
         return "fortiwaf"
-    elif any(k in combined_info for k in ("fortinet", "fortigate", "fortios", "forti")):
+    elif any(k in combined_info for k in ("fortinet", "fortigate", "fortianalyzer", "fgt-", "fgt", "fml-", "fml", "fortios", "forti")):
         return "fortinet"
     else:
         # Default fallback to palo_alto
         return "palo_alto"
+
 

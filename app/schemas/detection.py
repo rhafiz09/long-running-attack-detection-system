@@ -14,6 +14,7 @@ class LogEntry(BaseModel):
     zone_origin: Optional[str] = Field("unknown", description="Network zone of origin")
     zone_impacted: Optional[str] = Field("unknown", description="Network zone impacted")
     log_source: Optional[str] = Field("unknown", description="Source device/entity logging the event")
+    additional_data: Optional[dict] = Field(default_factory=dict, description="Additional flexible log metadata")
 
     model_config = ConfigDict(
         json_schema_extra={

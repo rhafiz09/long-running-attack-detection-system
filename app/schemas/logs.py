@@ -16,6 +16,16 @@ class LogBaseSchema(BaseModel):
     zone_origin: Optional[str] = Field(None, description="Network zone of origin")
     zone_impacted: Optional[str] = Field(None, description="Network zone impacted")
     log_source: Optional[str] = Field(None, description="Source device/entity logging the event")
+    port_origin: Optional[int] = Field(None, description="TCP/UDP Port of origin")
+    protocol: Optional[str] = Field(None, description="Network protocol used (TCP, UDP, ICMP, etc.)")
+    action: Optional[str] = Field(None, description="Firewall action taken (drop, allow, reset, etc.)")
+    severity: Optional[str] = Field(None, description="Severity level (critical, high, medium, low, info)")
+    threat_name: Optional[str] = Field(None, description="Detected threat or vulnerability name")
+    application: Optional[str] = Field(None, description="App-ID or application classified")
+    country_origin: Optional[str] = Field(None, description="Country of origin")
+    country_impacted: Optional[str] = Field(None, description="Country impacted")
+    rule_name: Optional[str] = Field(None, description="Firewall rule or policy name triggered")
+    classification: Optional[str] = Field(None, description="Log event classification (Attack, Traffic, etc.)")
     additional_data: Dict[str, Any] = Field(
         default_factory=dict,
         description="Dynamic JSONB dictionary containing all remaining CSV columns"

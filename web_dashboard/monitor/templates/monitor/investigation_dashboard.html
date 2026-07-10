@@ -1,0 +1,388 @@
+{% extends "monitor/base.html" %}
+
+{% block title %}PLN Security - Investigation Dashboard{% endblock %}
+
+{% block content %}
+<div class="space-y-6 animate-fade-in pb-12">
+    <!-- Page Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">Investigation Dashboard</h1>
+            <p class="text-xs sm:text-sm text-slate-500 font-medium mt-1">Analisis instan dan komprehensif data serangan siber berbasis kecerdasan buatan.</p>
+        </div>
+        <div class="flex items-center space-x-2">
+            <button onclick="window.location.reload()" class="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-bold text-xs flex items-center space-x-1.5 shadow-sm transition-all">
+                <span>🔄 Refresh Data</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Layout Grid: 2 Columns (Image 1 & Image 2 Proportion) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Left Column: IP Attack List (lg:col-span-4) -->
+        <div class="lg:col-span-4 bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col shadow-sm sticky top-24">
+            <div class="flex items-center justify-between pb-4 mb-3 border-b border-slate-100 relative">
+                <div class="flex items-center space-x-2">
+                    <h3 class="font-extrabold text-base text-slate-800">IP Attack List</h3>
+                    <span class="text-[10px] font-black uppercase text-pln-blue bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">{{ ip_list|length }}</span>
+                </div>
+                
+                <!-- Single Filter Button with Icon -->
+                <button onclick="toggleFilterMenu()" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors relative {% if fw_filter != 'all' or time_filter != '24h' %}text-pln-blue bg-blue-50/80 ring-1 ring-pln-blue/30{% endif %}" title="Filter Options">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                    </svg>
+                    {% if fw_filter != 'all' or time_filter != '24h' %}
+                    <span class="absolute top-1 right-1 w-2 h-2 bg-pln-blue rounded-full"></span>
+                    {% endif %}
+                </button>
+
+                <!-- Expandable Filter Popover/Menu Container (Hidden by default) -->
+                <div id="filterMenuPopover" class="hidden absolute right-0 top-12 w-64 bg-white rounded-2xl shadow-xl border border-slate-200/90 p-4 z-50 animate-fade-in">
+                    <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-100">
+                        <span class="text-xs font-black text-slate-800 uppercase tracking-wider">Filter Data IP</span>
+                        <button onclick="toggleFilterMenu()" class="text-slate-400 hover:text-slate-600 text-xs font-bold">✕</button>
+                    </div>
+
+                    <!-- Jenis Firewall Filter -->
+                    <div class="mb-3">
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Jenis Firewall</label>
+                        <select id="fwFilterSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:border-pln-blue focus:ring-1 focus:ring-pln-blue transition-all cursor-pointer">
+                            <option value="all" {% if fw_filter == 'all' %}selected{% endif %}>🛡️ Semua Firewall</option>
+                            <option value="pa" {% if fw_filter == 'pa' %}selected{% endif %}>🔵 Palo Alto</option>
+                            <option value="fw" {% if fw_filter == 'fw' %}selected{% endif %}>🔴 FortiWAF</option>
+                            <option value="fn" {% if fw_filter == 'fn' %}selected{% endif %}>🟢 FortiGate</option>
+                        </select>
+                    </div>
+
+                    <!-- Rentang Waktu Filter -->
+                    <div class="mb-4">
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Rentang Waktu Log</label>
+                        <select id="timeFilterSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:border-pln-blue focus:ring-1 focus:ring-pln-blue transition-all cursor-pointer">
+                            <option value="24h" {% if time_filter == '24h' %}selected{% endif %}>🕒 24 Jam Terakhir</option>
+                            <option value="7d" {% if time_filter == '7d' %}selected{% endif %}>📅 7 Hari Terakhir</option>
+                            <option value="30d" {% if time_filter == '30d' %}selected{% endif %}>📆 30 Hari Terakhir</option>
+                            <option value="all" {% if time_filter == 'all' %}selected{% endif %}>♾️ Semua Waktu</option>
+                        </select>
+                    </div>
+
+                    <!-- Action buttons inside Popover -->
+                    <div class="flex items-center space-x-2">
+                        <button onclick="applyFilters()" class="w-full py-2 px-3 rounded-xl btn-pln font-black text-xs shadow-sm transition-all text-center">
+                            Terapkan Filter
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search input box -->
+            <div class="relative mb-4">
+                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                </div>
+                <input type="text" id="ipSearchInput" oninput="filterIPList(this.value)" placeholder="Cari IP Address..."
+                    class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-pln-blue focus:ring-1 focus:ring-pln-blue transition-all">
+            </div>
+
+            <!-- Scrollable IP List Container -->
+            <div id="ipListContainer" class="flex-1 overflow-y-auto max-h-[620px] space-y-2.5 pr-1">
+                {% for item in ip_list %}
+                <div id="ip-card-{{ item.ip|slugify }}" onclick="selectIP('{{ item.ip }}')"
+                    class="ip-list-item cursor-pointer p-3.5 rounded-xl border transition-all {% if item.ip == selected_ip.ip %}bg-blue-50 border-transparent shadow-sm{% else %}bg-white border-slate-200/70 hover:border-slate-300 hover:bg-slate-50/50{% endif %}"
+                    data-ip="{{ item.ip }}" data-attack="{{ item.attack_type }}" data-location="{{ item.location }}">
+                    <div class="flex items-center justify-between">
+                        <span class="font-mono font-black text-sm {% if item.ip == selected_ip.ip %}text-pln-blue{% else %}text-slate-800{% endif %} ip-text">{{ item.ip }}</span>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold {{ item.risk_class }} risk-badge">{{ item.risk }}</span>
+                    </div>
+                    <div class="text-xs font-bold text-slate-600 mt-1 truncate attack-text">{{ item.attack_type }}</div>
+                    <div class="flex items-center justify-between text-[11px] text-slate-400 mt-2 font-medium">
+                        <span class="flex items-center space-x-1">
+                            <span>🕒</span>
+                            <span class="time-text">{{ item.time }}</span>
+                        </span>
+                        <span class="truncate max-w-[120px] text-right location-text">{{ item.location|default:"Global" }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Right Column: Target Details & AI Analysis (lg:col-span-8) -->
+        <div class="lg:col-span-8 flex flex-col space-y-6">
+            
+            <!-- Card 1: Target Detail & 8 Specifications Grid -->
+            <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
+                <!-- Title & Risk Badge Row -->
+                <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-5 border-b border-slate-100">
+                    <div>
+                        <span class="text-[10px] uppercase font-black tracking-wider text-slate-400 block mb-1">TARGET ANALISIS TERPILIH</span>
+                        <h2 id="detailIpAddress" class="text-3xl sm:text-4xl font-black font-mono text-slate-800 tracking-tight">{{ selected_ip.ip }}</h2>
+                        <div class="flex items-center space-x-3 mt-2 text-xs font-semibold">
+                            <span class="text-slate-600 flex items-center space-x-1">
+                                <span>📍</span>
+                                <span id="detailLocation">{{ selected_ip.location }}</span>
+                            </span>
+                            <span id="detailStatus" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-extrabold bg-red-50 text-red-600 border border-red-200">
+                                🚫 {{ selected_ip.status }}
+                            </span>
+                        </div>
+                    </div>
+                    <div>
+                        <span id="detailRiskBadge" class="px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-sm {{ selected_ip.risk_class }}">
+                            {{ selected_ip.risk }} RISK
+                        </span>
+                    </div>
+                </div>
+
+                <!-- 7 Mini Specs Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 my-6">
+                    <!-- Spec 1: Nama Firewall -->
+                    <div class="bg-slate-50/90 border border-slate-200/70 rounded-xl p-3.5 flex flex-col justify-between">
+                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">1. NAMA FIREWALL</span>
+                        <span id="specFirewall" class="text-sm font-black text-slate-800 mt-1.5">{{ selected_ip.firewall }}</span>
+                    </div>
+
+                    <!-- Spec 2: Target (IP Impacted) -->
+                    <div class="bg-slate-50/90 border border-slate-200/70 rounded-xl p-3.5 flex flex-col justify-between">
+                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">2. TARGET (IP IMPACTED)</span>
+                        <span id="specTargetIp" class="text-sm font-black font-mono text-pln-blue mt-1.5">{{ selected_ip.target_ip }}</span>
+                    </div>
+
+                    <!-- Spec 3: Rata-rata Bytes -->
+                    <div class="bg-slate-50/90 border border-slate-200/70 rounded-xl p-3.5 flex flex-col justify-between">
+                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">3. RATA-RATA BYTES (FORTI)</span>
+                        <span id="specAvgBytes" class="text-sm font-black text-slate-800 mt-1.5">{{ selected_ip.avg_bytes }}</span>
+                    </div>
+
+                    <!-- Spec 4: Jam Terdeteksi -->
+                    <div class="bg-slate-50/90 border border-slate-200/70 rounded-xl p-3.5 flex flex-col justify-between">
+                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">4. JAM TERDETEKSI</span>
+                        <span id="specTime" class="text-sm font-black text-indigo-600 mt-1.5">{{ selected_ip.time }}</span>
+                    </div>
+
+                    <!-- Spec 5: Jumlah IP Per Sesi -->
+                    <div class="bg-slate-50/90 border border-slate-200/70 rounded-xl p-3.5 flex flex-col justify-between">
+                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">5. JUMLAH IP PER SESI</span>
+                        <span id="specIpPerSession" class="text-sm font-black text-slate-800 mt-1.5">{{ selected_ip.ip_per_session }}</span>
+                    </div>
+
+                    <!-- Spec 6: Jumlah IP Per Waktu -->
+                    <div class="bg-slate-50/90 border border-slate-200/70 rounded-xl p-3.5 flex flex-col justify-between">
+                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">6. JUMLAH IP PER WAKTU</span>
+                        <span id="specIpPerTime" class="text-sm font-black text-slate-800 mt-1.5">{{ selected_ip.ip_per_time }}</span>
+                    </div>
+
+                    <!-- Spec 7: Nama Serangan -->
+                    <div class="bg-slate-50/90 border border-slate-200/70 rounded-xl p-3.5 sm:col-span-2 flex flex-col justify-between">
+                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">7. NAMA SERANGAN</span>
+                        <div class="mt-1.5">
+                            <span id="specAttackName" class="inline-block px-2.5 py-0.5 rounded-lg text-sm font-black bg-red-100 text-red-700 border border-red-200">
+                                {{ selected_ip.attack_name }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 8: Log Kesalahan / Error Protocol -->
+                <div class="bg-amber-50/80 border border-amber-200/90 rounded-xl p-4 flex items-start space-x-3.5 shadow-2xs">
+                    <div class="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5 shadow-2xs">
+                        ⚠️
+                    </div>
+                    <div>
+                        <h5 class="text-[11px] font-black uppercase text-amber-900 tracking-wider">8. LOG KESALAHAN / ERROR PROTOCOL</h5>
+                        <p id="specErrorLog" class="text-xs font-semibold text-slate-700 mt-1 font-mono leading-relaxed">{{ selected_ip.error_log }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 2: AI Comprehensive Analysis (Image 2 + Analisis Button) -->
+            <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 relative overflow-hidden">
+                <!-- Header with Analisis Button right next to title -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                    <div class="flex items-center space-x-3.5">
+                        <div class="w-12 h-12 rounded-2xl bg-pln-blue text-white flex items-center justify-center text-2xl shadow-md flex-shrink-0">
+                            🤖
+                        </div>
+                        <div>
+                            <h3 class="font-black text-lg text-slate-900 tracking-tight flex items-center">
+                                <span>Analisis Komprehensif AI Assistant</span>
+                                <span class="ml-2 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-pln-blue uppercase tracking-wider">Gemini AI</span>
+                            </h3>
+                            <p class="text-xs text-slate-500 font-medium mt-0.5">Hasil korelasi cerdas log aktivitas jaringan siber</p>
+                        </div>
+                    </div>
+
+                    <!-- Button Analisis mentriger proses AI -->
+                    <button onclick="triggerAIAnalysis()" id="aiAnalyzeBtn"
+                        class="px-5 py-2.5 rounded-xl btn-pln font-black text-xs transition-all shadow-md flex items-center space-x-2 flex-shrink-0 transform hover:scale-105 active:scale-95">
+                        <span id="aiBtnIcon" class="text-sm">⚡</span>
+                        <span id="aiBtnText">Analisis AI</span>
+                    </button>
+                </div>
+
+                <!-- Narrative Box Container -->
+                <div class="bg-slate-50/90 border border-slate-200/80 rounded-2xl p-5 sm:p-6 mt-5 transition-all" id="aiContentContainer">
+                    
+                    <!-- Narrative & Mitigations Section -->
+                    <div id="aiNarrativeSection" class="space-y-5">
+                        <p id="aiNarrativeText" class="text-xs sm:text-sm text-slate-700 font-normal leading-relaxed">
+                            {{ selected_ip.ai_narrative|safe }}
+                        </p>
+
+                        <div class="pt-3 border-t border-slate-200/70">
+                            <h4 class="text-[11px] font-black uppercase text-pln-blue tracking-wider mb-2.5">REKOMENDASI TINDAKAN MITIGASI</h4>
+                            <ul id="aiRecommendationsList" class="list-disc list-inside space-y-2 text-xs sm:text-sm font-semibold text-slate-700">
+                                {% for rec in selected_ip.ai_recommendations %}
+                                <li>{{ rec }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Loading Spinner Section (Hidden when not processing) -->
+                    <div id="aiLoadingSection" class="hidden py-8 flex flex-col items-center justify-center text-center space-y-3.5">
+                        <div class="w-9 h-9 border-4 border-pln-blue border-t-transparent rounded-full animate-spin"></div>
+                        <p class="text-xs sm:text-sm font-extrabold text-slate-700">Sistem AI Google Gemini sedang mengorelasikan log firewall & merumuskan mitigasi...</p>
+                        <span class="text-[11px] text-slate-500 font-medium">Mengecek parameter muatan dan konektivitas antarmuka hulu</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- ==========================================
+     CLIENT-SIDE INTERACTIVE JS LOGIC
+=========================================== -->
+<script>
+    // All loaded IPs data in memory for instant switching
+    const allIPData = {{ ip_list_json|safe }};
+    let currentSelectedIp = "{{ selected_ip.ip }}";
+
+    function slugify(text) {
+        return text.toString().toLowerCase().trim().replace(/[\s\W-]+/g, '-');
+    }
+
+    // Filter IP list in real-time as user types in the search box
+    function filterIPList(query) {
+        const q = query.toLowerCase().trim();
+        const items = document.querySelectorAll(".ip-list-item");
+        items.forEach(item => {
+            const ip = item.getAttribute("data-ip").toLowerCase();
+            const attack = item.getAttribute("data-attack").toLowerCase();
+            const loc = item.getAttribute("data-location").toLowerCase();
+            if (ip.includes(q) || attack.includes(q) || loc.includes(q)) {
+                item.style.display = "block";
+            } else {
+                item.style.display = "none";
+            }
+        });
+    }
+
+    // Select IP from left card and update all 8 specifications + AI card instantly
+    function selectIP(ip) {
+        currentSelectedIp = ip;
+        const itemData = allIPData.find(d => d.ip === ip);
+        if (!itemData) return;
+
+        // Update active highlight style in left list
+        document.querySelectorAll(".ip-list-item").forEach(card => {
+            if (card.getAttribute("data-ip") === ip) {
+                card.className = "ip-list-item cursor-pointer p-3.5 rounded-xl border transition-all bg-blue-50 border-transparent shadow-sm";
+                const ipText = card.querySelector(".ip-text");
+                if (ipText) ipText.className = "font-mono font-black text-sm text-pln-blue ip-text";
+            } else {
+                card.className = "ip-list-item cursor-pointer p-3.5 rounded-xl border transition-all bg-white border-slate-200/70 hover:border-slate-300 hover:bg-slate-50/50";
+                const ipText = card.querySelector(".ip-text");
+                if (ipText) ipText.className = "font-mono font-black text-sm text-slate-800 ip-text";
+            }
+        });
+
+        // Update target details header
+        document.getElementById("detailIpAddress").innerText = itemData.ip;
+        document.getElementById("detailLocation").innerText = itemData.location || "Global";
+        document.getElementById("detailStatus").innerText = "🚫 " + (itemData.status || "Auto Blocked");
+        
+        const riskBadge = document.getElementById("detailRiskBadge");
+        riskBadge.className = "px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-sm " + itemData.risk_class;
+        riskBadge.innerText = itemData.risk + " RISK";
+
+        // Update 7 Mini specifications
+        document.getElementById("specFirewall").innerText = itemData.firewall || "Palo Alto";
+        document.getElementById("specTargetIp").innerText = itemData.target_ip || "10.14.20.5";
+        document.getElementById("specAvgBytes").innerText = itemData.avg_bytes || "1,240 KB/s";
+        document.getElementById("specTime").innerText = itemData.time || "12:21:00 PM";
+        document.getElementById("specIpPerSession").innerText = itemData.ip_per_session || "145 IP";
+        document.getElementById("specIpPerTime").innerText = itemData.ip_per_time || "890 IP / Menit";
+        document.getElementById("specAttackName").innerText = itemData.attack_name || "DDoS Flood";
+
+        // Update Card 8: Error Protocol
+        document.getElementById("specErrorLog").innerText = itemData.error_log || "Handshake timeout di interface WAN-2 (ERR_PROTOCOL_ERROR)";
+
+        // Update AI Narrative & Mitigations
+        document.getElementById("aiNarrativeText").innerHTML = itemData.ai_narrative || "";
+        const recList = document.getElementById("aiRecommendationsList");
+        recList.innerHTML = "";
+        if (itemData.ai_recommendations && itemData.ai_recommendations.length > 0) {
+            itemData.ai_recommendations.forEach(rec => {
+                const li = document.createElement("li");
+                li.innerText = rec;
+                recList.appendChild(li);
+            });
+        }
+
+        // Trigger brief simulated AI analysis flash on switch for dynamic feel
+        triggerAIAnalysis(450);
+    }
+
+    function toggleFilterMenu() {
+        const menu = document.getElementById("filterMenuPopover");
+        if (menu) {
+            menu.classList.toggle("hidden");
+        }
+    }
+
+    function applyFilters() {
+        const fw = document.getElementById("fwFilterSelect").value;
+        const time = document.getElementById("timeFilterSelect").value;
+        window.location.href = `?fw=${fw}&time=${time}`;
+    }
+
+    // Trigger AI Analysis animation/process when clicking 'Analisis' button
+    function triggerAIAnalysis(customDuration = 1200) {
+        const narrativeSec = document.getElementById("aiNarrativeSection");
+        const loadingSec = document.getElementById("aiLoadingSection");
+        const btn = document.getElementById("aiAnalyzeBtn");
+        const btnIcon = document.getElementById("aiBtnIcon");
+        const btnText = document.getElementById("aiBtnText");
+
+        if (!narrativeSec || !loadingSec) return;
+
+        // Show loading state
+        narrativeSec.classList.add("hidden");
+        loadingSec.classList.remove("hidden");
+        if (btn) {
+            btn.disabled = true;
+            btn.classList.add("opacity-75", "cursor-not-allowed");
+            if (btnIcon) btnIcon.innerText = "⏳";
+            if (btnText) btnText.innerText = "Menganalisis...";
+        }
+
+        // Simulate AI correlation processing delay
+        setTimeout(() => {
+            loadingSec.classList.add("hidden");
+            narrativeSec.classList.remove("hidden");
+            if (btn) {
+                btn.disabled = false;
+                btn.classList.remove("opacity-75", "cursor-not-allowed");
+                if (btnIcon) btnIcon.innerText = "⚡";
+                if (btnText) btnText.innerText = "Analisis AI";
+            }
+        }, customDuration);
+    }
+</script>
+{% endblock %}

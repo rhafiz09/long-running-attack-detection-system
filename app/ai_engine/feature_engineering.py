@@ -40,10 +40,13 @@ class LogFeatureEngineer:
 
         df = pd.DataFrame(raw_logs)
         
-        # Ensure log_date is datetime
+        # Ensure log_date is datetime and handle NaT values gracefully
         if "log_date" not in df.columns:
             df["log_date"] = pd.Timestamp.now()
-        df["log_date"] = pd.to_datetime(df["log_date"])
+        df["log_date"] = pd.to_datetime(df["log_date"], errors="coerce")
+        df = df.dropna(subset=["log_date"])
+        if df.empty:
+            return df
         
         # Fill missing values with standard place-holders (and create column if missing)
         defaults = {

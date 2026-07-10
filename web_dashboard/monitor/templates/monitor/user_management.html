@@ -1,0 +1,532 @@
+{% extends "monitor/base.html" %}
+
+{% block title %}PLN Admin - User Management Suite{% endblock %}
+
+{% block sidebar %}
+<!-- Left Sidebar (Dedicated PLN Admin Management Suite) -->
+<aside id="appSidebar"
+    class="w-64 sidebar-pln-dark flex-shrink-0 flex flex-col justify-between hidden md:flex transition-all duration-300 z-30 shadow-2xl min-h-screen">
+    <div>
+        <!-- Sidebar Header / Logo -->
+        <div class="p-6 border-b border-white/10 flex items-center justify-between">
+            <div class="flex items-center space-x-3 overflow-hidden">
+                <div
+                    class="w-10 h-10 rounded-xl bg-white text-pln-blue flex items-center justify-center shadow-md flex-shrink-0">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path
+                            d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                    </svg>
+                </div>
+                <div class="sidebar-logo-text">
+                    <h2 class="font-black text-lg tracking-tight leading-tight text-white">PLN Admin</h2>
+                    <p class="text-[11px] text-blue-300 uppercase tracking-wider font-semibold">Management Suite</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Links -->
+        <nav class="p-4 space-y-2.5">
+            <a href="{% url 'user_management' %}"
+                class="flex items-center space-x-3 px-4 py-3.5 rounded-xl font-black text-slate-900 bg-amber-400 shadow-lg transition-all">
+                <span class="text-lg flex-shrink-0">👥</span>
+                <span class="sidebar-text font-extrabold tracking-wide">User Management</span>
+            </a>
+
+            <a href="{% url 'dashboard' %}"
+                class="flex items-center space-x-3 px-4 py-3 rounded-xl font-bold text-blue-100 hover:bg-white/10 transition-all">
+                <svg class="w-5 h-5 flex-shrink-0 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"
+                        d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                <span class="sidebar-text">Back to Dashboard</span>
+            </a>
+        </nav>
+    </div>
+
+    <!-- Sidebar Footer -->
+    <div class="p-6 border-t border-white/10 text-xs text-blue-300/80 font-medium flex flex-col space-y-1">
+        <span class="sidebar-footer-text">&copy; 2026 PLN Security</span>
+        <span class="sidebar-footer-text text-[10px] text-blue-400">Command Center Suite v2.0</span>
+    </div>
+</aside>
+{% endblock sidebar %}
+
+{% block topbar %}
+<!-- Top Navbar (PLN Blue header bar) -->
+<header class="sidebar-pln px-6 py-3.5 flex items-center justify-between shadow-md sticky top-0 z-20">
+    <div class="flex items-center space-x-4">
+        <!-- Hamburger Button (Universal Toggle for both Mobile & Desktop) -->
+        <button onclick="toggleSidebar()"
+            class="p-2 rounded-lg hover:bg-blue-800 text-white focus:outline-none transition-all flex items-center justify-center"
+            title="Toggle Sidebar">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+        </button>
+        <div class="flex items-center space-x-2">
+            <span class="text-sm font-bold tracking-wide uppercase text-blue-100">SYSTEM ADMINISTRATION</span>
+        </div>
+    </div>
+
+    <!-- Right Navbar Controls -->
+    <div class="flex items-center space-x-4">
+        <!-- Role Badge -->
+        <div
+            class="hidden sm:flex items-center px-3.5 py-1.5 bg-blue-800/80 border border-blue-700 rounded-full text-xs font-semibold text-white shadow-inner">
+            <span>Role: {% if user.is_superuser %}Super Admin{% else %}SOC Analyst{% endif %}</span>
+        </div>
+
+        <!-- User Account Info with Dropdown & Logout -->
+        <div class="relative inline-block text-left" id="userDropdownContainer">
+            <button id="userDropdownBtn" onclick="toggleUserDropdown(event)"
+                class="flex items-center space-x-2 p-1.5 rounded-full hover:bg-blue-800/80 transition-all focus:outline-none border border-transparent hover:border-blue-700">
+                <div
+                    class="w-8 h-8 rounded-full bg-amber-400 text-slate-900 font-black flex items-center justify-center text-xs shadow-md">
+                    {{ user.username|slice:":2"|upper }}
+                </div>
+                <svg class="w-4 h-4 text-blue-200 hidden sm:block transition-transform duration-200"
+                    id="userDropdownArrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
+
+            <!-- Dropdown Menu -->
+            <div id="userDropdown"
+                class="hidden absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2 z-50 animate-fade-in text-slate-800">
+                <div class="px-4 py-3 border-b border-slate-100">
+                    <p class="text-xs font-medium text-slate-500">Signed in as</p>
+                    <p class="text-sm font-black text-slate-900 truncate">{{ user.username }}</p>
+                    <span
+                        class="inline-block mt-1 px-2 py-0.5 bg-blue-50 text-pln-blue text-[10px] font-bold rounded-full border border-blue-200">
+                        {% if user.is_superuser %}Super Admin{% else %}SOC Analyst{% endif %}
+                    </span>
+                </div>
+
+                <div class="py-1">
+                    <a href="{% url 'dashboard' %}"
+                        class="flex items-center space-x-2.5 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-pln-blue transition-colors">
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                        </svg>
+                        <span>System Dashboard</span>
+                    </a>
+                    {% if user.is_superuser %}
+                    <a href="{% url 'user_management' %}"
+                        class="flex items-center space-x-2.5 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-pln-blue transition-colors">
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span>User Management</span>
+                    </a>
+                    {% endif %}
+                </div>
+
+                <div class="border-t border-slate-100 py-1">
+                    <a href="{% url 'logout' %}"
+                        class="flex items-center space-x-2.5 px-4 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors">
+                        <svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        <span>Keluar / Logout</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+{% endblock topbar %}
+
+{% block content %}
+<div class="space-y-6 animate-fade-in pb-12">
+    <!-- Page Header & Search Bar section -->
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">Account Management</h1>
+            <p class="text-xs text-slate-500 mt-1">Kelola data akun, password, hak akses, dan status pemblokiran user
+                sistem.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+            <!-- Search Bar -->
+            <div class="relative">
+                <input type="text" id="userSearchInput" onkeyup="filterUsersTable()"
+                    placeholder="🔍 Cari username atau email..."
+                    class="pl-4 pr-10 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-pln-blue focus:border-pln-blue w-64 sm:w-72 bg-white shadow-sm font-semibold text-slate-800">
+            </div>
+            <!-- Tombol Tambah User -->
+            <button onclick="openAddUserModal()"
+                class="px-4 py-1.5 text-xs font-black bg-slate-900 hover:bg-slate-800 text-amber-400 rounded-xl shadow-md hover:shadow-slate-500/20 transition-all flex items-center space-x-2 border border-slate-700 hover:scale-[1.02] active:scale-[0.98]">
+                <span class="text-base font-bold text-amber-400">+</span>
+                <span>Tambah User</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Card containing Users Table -->
+    <div class="card-pln bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+        <!-- Table Container -->
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse" id="usersTable">
+                <thead>
+                    <tr
+                        class="bg-slate-50/75 border-b border-slate-200 text-[11px] font-bold tracking-wider text-slate-400 uppercase">
+                        <th class="px-8 py-5 w-20">ID</th>
+                        <th class="px-8 py-5">USERNAME</th>
+                        <th class="px-8 py-5 text-center">STATUS</th>
+                        <th class="px-8 py-5 text-center">AKSES AKUN</th>
+                        <th class="px-8 py-5 text-center">AKSI</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-xs font-semibold text-slate-700" id="userTableBody">
+                    {% for u in users %}
+                    <tr class="hover:bg-slate-50/50 transition-colors user-row">
+                        <td class="px-8 py-4 font-bold text-slate-400">
+                            #{{ forloop.counter }}
+                        </td>
+                        <td class="px-8 py-4">
+                            <div class="flex items-center space-x-3.5">
+                                <div
+                                    class="w-9 h-9 rounded-full bg-blue-100/80 text-blue-700 font-extrabold flex items-center justify-center text-[11px] shadow-xs flex-shrink-0">
+                                    {{ u.username|slice:":2"|upper }}
+                                </div>
+                                <div class="flex flex-col">
+                                    <span class="text-sm text-slate-900 font-bold username-cell">{{ u.username }}</span>                                
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-8 py-4 text-center">
+                            {% if u.is_active %}
+                            <span
+                                class="inline-flex items-center px-3.5 py-1 rounded-full text-xs font-bold bg-emerald-100/70 text-emerald-800 border border-emerald-200/50 shadow-2xs">
+                                Active
+                            </span>
+                            {% else %}
+                            <span
+                                class="inline-flex items-center px-3.5 py-1 rounded-full text-xs font-bold bg-rose-100/70 text-rose-800 border border-rose-200/50 shadow-2xs">
+                                Blocked
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-8 py-4 text-center">
+                            {% if u.is_superuser %}
+                            <span
+                                class="inline-flex items-center px-3.5 py-1 rounded-full text-xs font-bold bg-amber-100/70 text-amber-900 border border-amber-200/50 shadow-2xs">
+                                ADMIN
+                            </span>
+                            {% else %}
+                            <span
+                                class="inline-flex items-center px-3.5 py-1 rounded-full text-xs font-bold bg-slate-100/70 text-slate-700 border border-slate-200/50 shadow-2xs">
+                                USER
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-8 py-4">
+                            <div class="flex items-center justify-center gap-2">
+                                <!-- Edit Details -->
+                                <button
+                                    onclick="openEditUserModal({{ u.id }}, '{{ u.username }}', '{{ u.email }}', '{% if u.is_superuser %}admin{% else %}analyst{% endif %}')"
+                                    class="px-3.5 py-1.5 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold transition-all text-[11px] border border-blue-100 flex items-center space-x-1 shadow-2xs"
+                                    title="Edit Profil">
+                                    <span>✏️ Edit</span>
+                                </button>
+
+                                <!-- Quick Toggle Block/Unblock -->
+                                <form method="POST" action="{% url 'user_toggle_active' u.id %}" class="inline-block"
+                                    onsubmit="return confirmToggle('{{ u.username }}', {{ u.id|yesno:'true,false' }}, {{ user.id }})">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                        class="px-3.5 py-1.5 rounded-full {% if u.is_active %}bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-100{% else %}bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-100{% endif %} font-bold transition-all text-[11px] border flex items-center space-x-1 shadow-2xs"
+                                        title="Toggle Aktif/Blokir">
+                                        {% if u.is_active %}
+                                        <span>🔒 Block</span>
+                                        {% else %}
+                                        <span>🔓 Unblock</span>
+                                        {% endif %}
+                                    </button>
+                                </form>
+
+                                <!-- Change Password -->
+                                <button onclick="openChangePasswordModal({{ u.id }}, '{{ u.username }}')"
+                                    class="px-3.5 py-1.5 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold transition-all text-[11px] border border-slate-200 flex items-center space-x-1 shadow-2xs"
+                                    title="Reset Password">
+                                    <span>🔑 Password</span>
+                                </button>
+
+                                <!-- Delete User -->
+                                {% if u.id != user.id %}
+                                <form method="POST" action="{% url 'user_delete' u.id %}" class="inline-block"
+                                    onsubmit="return confirmDelete('{{ u.username }}')">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                        class="px-3.5 py-1.5 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold transition-all text-[11px] border border-rose-100 hover:border-rose-200 flex items-center space-x-1 shadow-2xs"
+                                        title="Hapus User">
+                                        <span>🗑️ Delete</span>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ==========================================
+     MODALS SECTION
+=========================================== -->
+
+<!-- MODAL 1: TAMBAH USER BARU -->
+<div id="addUserModal"
+    class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+    <div
+        class="bg-white w-full max-w-md mx-4 rounded-3xl shadow-2xl border border-slate-200 p-6 space-y-5 transform scale-95 transition-transform duration-300">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 class="text-base font-black text-slate-900 tracking-tight">👤 Tambah Pengguna Baru</h3>
+            <button onclick="closeAddUserModal()"
+                class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
+        </div>
+        <form method="POST" action="{% url 'user_create' %}" class="space-y-4 text-xs">
+            {% csrf_token %}
+
+            <div class="space-y-1">
+                <label class="block font-black text-slate-700">Username *</label>
+                <input type="text" name="username" required placeholder="Masukkan username unik"
+                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-bold focus:outline-none focus:border-pln-blue focus:bg-white transition-all text-xs">
+            </div>
+
+            <div class="space-y-1">
+                <label class="block font-black text-slate-700">Alamat Email</label>
+                <input type="email" name="email" placeholder="contoh@pln.co.id"
+                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:border-pln-blue focus:bg-white transition-all text-xs">
+            </div>
+
+            <div class="space-y-1">
+                <label class="block font-black text-slate-700">Password Awal *</label>
+                <input type="password" name="password" required placeholder="Minimal 8 karakter"
+                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:border-pln-blue focus:bg-white transition-all text-xs">
+            </div>
+
+            <div class="space-y-1">
+                <label class="block font-black text-slate-700">Peran / Role</label>
+                <select name="role"
+                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-bold focus:outline-none focus:border-pln-blue focus:bg-white transition-all text-xs">
+                    <option value="analyst" selected>SOC Analyst (Read-Only Monitor)</option>
+                    <option value="admin">Super Admin (Full Access)</option>
+                </select>
+            </div>
+
+            <div class="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100">
+                <button type="button" onclick="closeAddUserModal()"
+                    class="px-4 py-2 bg-slate-100 text-slate-600 font-bold rounded-lg hover:bg-slate-200 transition-all">Batal</button>
+                <button type="submit"
+                    class="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white font-black rounded-lg transition-all shadow-md">Simpan
+                    User</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL 2: EDIT USER -->
+<div id="editUserModal"
+    class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+    <div
+        class="bg-white w-full max-w-md mx-4 rounded-3xl shadow-2xl border border-slate-200 p-6 space-y-5 transform scale-95 transition-transform duration-300">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 class="text-base font-black text-slate-900 tracking-tight">✏️ Edit Informasi Pengguna</h3>
+            <button onclick="closeEditUserModal()"
+                class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
+        </div>
+        <form id="editUserForm" method="POST" action="" class="space-y-4 text-xs">
+            {% csrf_token %}
+
+            <div class="space-y-1">
+                <label class="block font-black text-slate-700">Username</label>
+                <input type="text" id="editUsername" disabled
+                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-slate-400 font-bold cursor-not-allowed text-xs">
+            </div>
+
+            <div class="space-y-1">
+                <label class="block font-black text-slate-700">Alamat Email</label>
+                <input type="email" name="email" id="editEmail" placeholder="contoh@pln.co.id"
+                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:border-pln-blue focus:bg-white transition-all text-xs">
+            </div>
+
+            <div class="space-y-1" id="editRoleContainer">
+                <label class="block font-black text-slate-700">Peran / Role</label>
+                <select name="role" id="editRole"
+                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-bold focus:outline-none focus:border-pln-blue focus:bg-white transition-all text-xs">
+                    <option value="analyst">SOC Analyst (Read-Only Monitor)</option>
+                    <option value="admin">Super Admin (Full Access)</option>
+                </select>
+                <p id="editSelfWarning" class="hidden text-[10px] text-amber-600 font-semibold mt-1">⚠️ Anda tidak dapat
+                    menurunkan peran admin Anda sendiri untuk menghindari kehilangan akses.</p>
+            </div>
+
+            <div class="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100">
+                <button type="button" onclick="closeEditUserModal()"
+                    class="px-4 py-2 bg-slate-100 text-slate-600 font-bold rounded-lg hover:bg-slate-200 transition-all">Batal</button>
+                <button type="submit"
+                    class="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white font-black rounded-lg transition-all shadow-md">Simpan
+                    Perubahan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL 3: UBAH PASSWORD -->
+<div id="changePasswordModal"
+    class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+    <div
+        class="bg-white w-full max-w-md mx-4 rounded-3xl shadow-2xl border border-slate-200 p-6 space-y-5 transform scale-95 transition-transform duration-300">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 class="text-base font-black text-slate-900 tracking-tight">🔑 Reset Password Pengguna</h3>
+            <button onclick="closeChangePasswordModal()"
+                class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
+        </div>
+        <form id="changePasswordForm" method="POST" action="" class="space-y-4 text-xs">
+            {% csrf_token %}
+
+            <div class="space-y-1">
+                <label class="block font-black text-slate-700">Username</label>
+                <input type="text" id="changePasswordUsername" disabled
+                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-slate-400 font-bold cursor-not-allowed text-xs">
+            </div>
+
+            <div class="space-y-1">
+                <label class="block font-black text-slate-700">Password Baru *</label>
+                <input type="password" name="password" required placeholder="Minimal 8 karakter baru"
+                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:border-pln-blue focus:bg-white transition-all text-xs">
+            </div>
+
+            <div class="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100">
+                <button type="button" onclick="closeChangePasswordModal()"
+                    class="px-4 py-2 bg-slate-100 text-slate-600 font-bold rounded-lg hover:bg-slate-200 transition-all">Batal</button>
+                <button type="submit"
+                    class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-900 font-black rounded-lg transition-all shadow-md">Reset
+                    Password</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Confirmation functions
+    function confirmDelete(username) {
+        return confirm(`Apakah Anda yakin ingin menghapus akun pengguna '${username}' secara permanen? Sesi login aktif user ini akan terputus.`);
+    }
+
+    function confirmToggle(username, isCurrentlyActive, currentUserId) {
+        const actionStr = isCurrentlyActive ? "memblokir / menonaktifkan" : "mengaktifkan / unblock";
+        return confirm(`Konfirmasi: Apakah Anda ingin ${actionStr} akun user '${username}'?`);
+    }
+
+    // Live Search Filter Function
+    function filterUsersTable() {
+        const input = document.getElementById("userSearchInput");
+        const filter = input.value.toLowerCase();
+        const rows = document.querySelectorAll(".user-row");
+
+        rows.forEach(row => {
+            const usernameCell = row.querySelector(".username-cell");
+            if (usernameCell) {
+                const text = usernameCell.textContent || usernameCell.innerText;
+                if (text.toLowerCase().indexOf(filter) > -1) {
+                    row.style.display = "";
+                } else {
+                    row.style.display = "none";
+                }
+            }
+        });
+    }
+
+    // Modal Control Functions
+    function showModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        modal.classList.remove("hidden");
+        void modal.offsetWidth;
+        modal.classList.remove("opacity-0");
+        modal.querySelector("div").classList.remove("scale-95");
+    }
+
+    function hideModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        modal.classList.add("opacity-0");
+        modal.querySelector("div").classList.add("scale-95");
+        setTimeout(() => {
+            modal.classList.add("hidden");
+        }, 300);
+    }
+
+    // Tambah User Modal handlers
+    function openAddUserModal() {
+        showModal("addUserModal");
+    }
+    function closeAddUserModal() {
+        hideModal("addUserModal");
+    }
+
+    // Edit User Modal handlers
+    function openEditUserModal(userId, username, email, role) {
+        document.getElementById("editUsername").value = username;
+        document.getElementById("editEmail").value = email;
+        document.getElementById("editRole").value = role;
+
+        const currentUserId = {{ user.id }
+    };
+    const editRoleSelect = document.getElementById("editRole");
+    const warning = document.getElementById("editSelfWarning");
+
+    if (userId === currentUserId) {
+        editRoleSelect.disabled = true;
+        warning.classList.remove("hidden");
+    } else {
+        editRoleSelect.disabled = false;
+        warning.classList.add("hidden");
+    }
+
+    const form = document.getElementById("editUserForm");
+    form.action = `/users/${userId}/update/`;
+
+    showModal("editUserModal");
+    }
+    function closeEditUserModal() {
+        hideModal("editUserModal");
+    }
+
+    // Change Password Modal handlers
+    function openChangePasswordModal(userId, username) {
+        document.getElementById("changePasswordUsername").value = username;
+
+        const form = document.getElementById("changePasswordForm");
+        form.action = `/users/${userId}/change-password/`;
+
+        showModal("changePasswordModal");
+    }
+    function closeChangePasswordModal() {
+        hideModal("changePasswordModal");
+    }
+
+    // Close modals on clicking backdrop
+    window.addEventListener("click", (e) => {
+        const modals = ["addUserModal", "editUserModal", "changePasswordModal"];
+        modals.forEach(id => {
+            const m = document.getElementById(id);
+            if (e.target === m) {
+                hideModal(id);
+            }
+        });
+    });
+</script>
+{% endblock %}

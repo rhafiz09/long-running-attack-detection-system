@@ -77,44 +77,38 @@ def seed_database():
         return
 
     # 2. Initialize database schema
-    logger.info("Initializing database tables...")
-    init_db()
-
-    # 2.5 Clear existing data if flag is set to keep database clean
+    # 2. Clear existing tables/schema if flag is set to guarantee new 18+1 columns are created cleanly
     if CLEAR_EXISTING_DATA:
-        logger.info("Clearing existing data from firewall log tables (TRUNCATE)...")
+        logger.info("Dropping existing tables to apply new 18+1 column schema (DROP TABLE CASCADE)...")
         db_clear = SessionLocal()
         try:
             from sqlalchemy import text
-            db_clear.execute(text("TRUNCATE TABLE palo_alto_logs, fortinet_logs, fortiwaf_logs RESTART IDENTITY CASCADE;"))
+            db_clear.execute(text("DROP TABLE IF EXISTS palo_alto_logs, fortinet_logs, fortiwaf_logs CASCADE;"))
             db_clear.commit()
-            logger.info("Database tables truncated successfully.")
+            logger.info("Database tables dropped successfully.")
         except Exception as e:
             db_clear.rollback()
-            logger.warning(f"Truncate failed: {e}. Falling back to DELETE...")
-            try:
-                db_clear.query(PaloAltoLog).delete()
-                db_clear.query(FortinetLog).delete()
-                db_clear.query(FortiWafLog).delete()
-                db_clear.commit()
-                logger.info("Database tables cleared using DELETE successfully.")
-            except Exception as delete_err:
-                db_clear.rollback()
-                logger.error(f"Failed to clear tables: {delete_err}")
+            logger.warning(f"Drop table failed: {e}")
         finally:
             db_clear.close()
+
+    # 3. Initialize database schema (creates new tables with 18+1 columns)
+    logger.info("Initializing database tables with updated 18+1 schema...")
+    init_db()
 
     # 3. Read dataset using pandas with chunksize to prevent RAM overload, looping until SAMPLE_SIZE is gathered
     logger.info(f"Reading CSV dataset ({DATASET_PATH}) in chunks of {CHUNK_SIZE} until gathering {SAMPLE_SIZE} records...")
     chunks = []
     total_loaded = 0
     try:
+        logger.info(f"Attempting to read CSV using utf-8 encoding...")
         csv_reader = pd.read_csv(
             DATASET_PATH,
             chunksize=CHUNK_SIZE,
             dtype=str,
             keep_default_na=False,
             low_memory=False,
+            encoding="utf-8",
         )
         for chunk in csv_reader:
             chunks.append(chunk)
@@ -122,17 +116,36 @@ def seed_database():
             logger.info(f"Loaded chunk of {len(chunk)} rows. Total in memory: {total_loaded}")
             if total_loaded >= SAMPLE_SIZE:
                 break
-
-        if not chunks:
-            logger.error("No data could be read from the CSV file.")
+    except Exception as utf8_err:
+        logger.warning(f"UTF-8 read failed ({utf8_err}), falling back to latin-1 encoding...")
+        chunks = []
+        total_loaded = 0
+        try:
+            csv_reader = pd.read_csv(
+                DATASET_PATH,
+                chunksize=CHUNK_SIZE,
+                dtype=str,
+                keep_default_na=False,
+                low_memory=False,
+                encoding="latin-1",
+            )
+            for chunk in csv_reader:
+                chunks.append(chunk)
+                total_loaded += len(chunk)
+                logger.info(f"Loaded chunk of {len(chunk)} rows. Total in memory: {total_loaded}")
+                if total_loaded >= SAMPLE_SIZE:
+                    break
+        except Exception as fallback_err:
+            logger.error(f"Failed to read CSV with both utf-8 and latin-1 encodings: {fallback_err}")
             return
 
-        combined_df = pd.concat(chunks)
-        sample_df = combined_df.head(SAMPLE_SIZE)
-        logger.info(f"Successfully loaded and concatenated {len(sample_df)} total sample rows into memory.")
-    except Exception as e:
-        logger.error(f"Error reading CSV file {DATASET_PATH}: {e}")
+    if not chunks:
+        logger.error("No data could be read from the CSV file.")
         return
+
+    combined_df = pd.concat(chunks)
+    sample_df = combined_df.head(SAMPLE_SIZE)
+    logger.info(f"Successfully loaded and concatenated {len(sample_df)} total sample rows into memory.")
 
 
     # 5. Apply Data Type Conversion utility from Service layer
@@ -171,7 +184,7 @@ def seed_database():
 
             model_class = repo.get_model_by_vendor(vendor_key)
             logger.info(f"Beginning bulk insertion into {model_class.__tablename__} ({len(records_batch)} records) in batches of {BATCH_INSERT_SIZE}...")
-            
+
             inserted_for_vendor = 0
             for i in range(0, len(records_batch), BATCH_INSERT_SIZE):
                 batch = records_batch[i : i + BATCH_INSERT_SIZE]
