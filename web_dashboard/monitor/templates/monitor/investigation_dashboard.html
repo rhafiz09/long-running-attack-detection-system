@@ -3,6 +3,7 @@
 {% block title %}PLN Security - Investigation Dashboard{% endblock %}
 
 {% block content %}
+{% csrf_token %}
 <div class="space-y-6 animate-fade-in pb-12">
     <!-- Page Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
@@ -179,7 +180,7 @@
                     <div class="bg-slate-50/90 border border-slate-200/70 rounded-xl p-3.5 sm:col-span-2 flex flex-col justify-between">
                         <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">7. NAMA SERANGAN</span>
                         <div class="mt-1.5">
-                            <span id="specAttackName" class="inline-block px-2.5 py-0.5 rounded-lg text-sm font-black bg-red-100 text-red-700 border border-red-200">
+                            <span id="specAttackName" class="inline-block px-2.5 py-0.5 rounded-lg text-sm font-black {{ selected_ip.risk_class }}">
                                 {{ selected_ip.attack_name }}
                             </span>
                         </div>
@@ -225,20 +226,23 @@
 
                 <!-- Narrative Box Container -->
                 <div class="bg-slate-50/90 border border-slate-200/80 rounded-2xl p-5 sm:p-6 mt-5 transition-all" id="aiContentContainer">
-                    
-                    <!-- Narrative & Mitigations Section -->
-                    <div id="aiNarrativeSection" class="space-y-5">
-                        <p id="aiNarrativeText" class="text-xs sm:text-sm text-slate-700 font-normal leading-relaxed">
-                            {{ selected_ip.ai_narrative|safe }}
-                        </p>
+
+                    <!-- Initial Prompt Section (Shown on load — instructs user to click button) -->
+                    <div id="aiPromptSection" class="py-8 flex flex-col items-center justify-center text-center space-y-3">
+                        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-3xl">
+                            🧠
+                        </div>
+                        <p class="text-sm font-extrabold text-slate-700">Analisis AI Belum Dijalankan</p>
+                        <p class="text-xs text-slate-500 font-medium max-w-sm">Klik tombol <strong class="text-pln-blue">⚡ Analisis AI</strong> di atas untuk menjalankan korelasi cerdas log firewall dan merumuskan narasi ancaman serta rekomendasi mitigasi untuk IP yang dipilih.</p>
+                    </div>
+
+                    <!-- Narrative & Mitigations Section (Hidden on load — shown after AI analysis) -->
+                    <div id="aiNarrativeSection" class="space-y-5 hidden">
+                        <p id="aiNarrativeText" class="text-xs sm:text-sm text-slate-700 font-normal leading-relaxed"></p>
 
                         <div class="pt-3 border-t border-slate-200/70">
                             <h4 class="text-[11px] font-black uppercase text-pln-blue tracking-wider mb-2.5">REKOMENDASI TINDAKAN MITIGASI</h4>
-                            <ul id="aiRecommendationsList" class="list-disc list-inside space-y-2 text-xs sm:text-sm font-semibold text-slate-700">
-                                {% for rec in selected_ip.ai_recommendations %}
-                                <li>{{ rec }}</li>
-                                {% endfor %}
-                            </ul>
+                            <ul id="aiRecommendationsList" class="list-disc list-inside space-y-2 text-xs sm:text-sm font-semibold text-slate-700"></ul>
                         </div>
                     </div>
 
@@ -246,7 +250,14 @@
                     <div id="aiLoadingSection" class="hidden py-8 flex flex-col items-center justify-center text-center space-y-3.5">
                         <div class="w-9 h-9 border-4 border-pln-blue border-t-transparent rounded-full animate-spin"></div>
                         <p class="text-xs sm:text-sm font-extrabold text-slate-700">Sistem AI Google Gemini sedang mengorelasikan log firewall & merumuskan mitigasi...</p>
-                        <span class="text-[11px] text-slate-500 font-medium">Mengecek parameter muatan dan konektivitas antarmuka hulu</span>
+                        <span class="text-[11px] text-slate-500 font-medium">Menganalisis riwayat prediction_logs dan konteks log sumber untuk IP yang dipilih</span>
+                    </div>
+
+                    <!-- Error Section (Hidden unless API fails) -->
+                    <div id="aiErrorSection" class="hidden py-6 flex flex-col items-center justify-center text-center space-y-2">
+                        <span class="text-3xl">⚠️</span>
+                        <p class="text-sm font-extrabold text-red-600">Gagal Menjalankan Analisis AI</p>
+                        <p id="aiErrorMessage" class="text-xs text-slate-500 font-medium max-w-sm"></p>
                     </div>
                 </div>
             </div>
@@ -318,25 +329,17 @@
         document.getElementById("specTime").innerText = itemData.time || "12:21:00 PM";
         document.getElementById("specIpPerSession").innerText = itemData.ip_per_session || "145 IP";
         document.getElementById("specIpPerTime").innerText = itemData.ip_per_time || "890 IP / Menit";
-        document.getElementById("specAttackName").innerText = itemData.attack_name || "DDoS Flood";
+        const attackBadge = document.getElementById("specAttackName");
+        if (attackBadge) {
+            attackBadge.innerText = itemData.attack_name || "Normal Traffic";
+            attackBadge.className = "inline-block px-2.5 py-0.5 rounded-lg text-sm font-black " + (itemData.risk_class || "bg-slate-100 text-slate-600 border border-slate-200");
+        }
 
         // Update Card 8: Error Protocol
         document.getElementById("specErrorLog").innerText = itemData.error_log || "Handshake timeout di interface WAN-2 (ERR_PROTOCOL_ERROR)";
 
-        // Update AI Narrative & Mitigations
-        document.getElementById("aiNarrativeText").innerHTML = itemData.ai_narrative || "";
-        const recList = document.getElementById("aiRecommendationsList");
-        recList.innerHTML = "";
-        if (itemData.ai_recommendations && itemData.ai_recommendations.length > 0) {
-            itemData.ai_recommendations.forEach(rec => {
-                const li = document.createElement("li");
-                li.innerText = rec;
-                recList.appendChild(li);
-            });
-        }
-
-        // Trigger brief simulated AI analysis flash on switch for dynamic feel
-        triggerAIAnalysis(450);
+        // Reset AI Analysis section to initial prompt state when switching IPs
+        resetAISection();
     }
 
     function toggleFilterMenu() {
@@ -352,37 +355,114 @@
         window.location.href = `?fw=${fw}&time=${time}`;
     }
 
-    // Trigger AI Analysis animation/process when clicking 'Analisis' button
-    function triggerAIAnalysis(customDuration = 1200) {
+    // Reset AI section to initial prompt state (called when switching IPs)
+    function resetAISection() {
+        const promptSec = document.getElementById("aiPromptSection");
         const narrativeSec = document.getElementById("aiNarrativeSection");
         const loadingSec = document.getElementById("aiLoadingSection");
+        const errorSec = document.getElementById("aiErrorSection");
         const btn = document.getElementById("aiAnalyzeBtn");
         const btnIcon = document.getElementById("aiBtnIcon");
         const btnText = document.getElementById("aiBtnText");
 
-        if (!narrativeSec || !loadingSec) return;
+        if (promptSec) promptSec.classList.remove("hidden");
+        if (narrativeSec) narrativeSec.classList.add("hidden");
+        if (loadingSec) loadingSec.classList.add("hidden");
+        if (errorSec) errorSec.classList.add("hidden");
+        if (btn) {
+            btn.disabled = false;
+            btn.classList.remove("opacity-75", "cursor-not-allowed");
+        }
+        if (btnIcon) btnIcon.innerText = "⚡";
+        if (btnText) btnText.innerText = "Analisis AI";
+    }
 
-        // Show loading state
-        narrativeSec.classList.add("hidden");
-        loadingSec.classList.remove("hidden");
+    // Trigger real AI Analysis via backend API call when clicking 'Analisis AI' button
+    function triggerAIAnalysis() {
+        if (!currentSelectedIp || currentSelectedIp === "Tidak Ada Ancaman Terdeteksi") return;
+
+        const promptSec = document.getElementById("aiPromptSection");
+        const narrativeSec = document.getElementById("aiNarrativeSection");
+        const loadingSec = document.getElementById("aiLoadingSection");
+        const errorSec = document.getElementById("aiErrorSection");
+        const btn = document.getElementById("aiAnalyzeBtn");
+        const btnIcon = document.getElementById("aiBtnIcon");
+        const btnText = document.getElementById("aiBtnText");
+
+        // Show loading state, hide everything else
+        if (promptSec) promptSec.classList.add("hidden");
+        if (narrativeSec) narrativeSec.classList.add("hidden");
+        if (errorSec) errorSec.classList.add("hidden");
+        if (loadingSec) loadingSec.classList.remove("hidden");
         if (btn) {
             btn.disabled = true;
             btn.classList.add("opacity-75", "cursor-not-allowed");
-            if (btnIcon) btnIcon.innerText = "⏳";
-            if (btnText) btnText.innerText = "Menganalisis...";
         }
+        if (btnIcon) btnIcon.innerText = "⏳";
+        if (btnText) btnText.innerText = "Menganalisis...";
 
-        // Simulate AI correlation processing delay
-        setTimeout(() => {
-            loadingSec.classList.add("hidden");
-            narrativeSec.classList.remove("hidden");
+        // Get context data for the selected IP
+        const itemData = allIPData.find(d => d.ip === currentSelectedIp);
+
+        // Make real API call to backend for AI-powered analysis
+        fetch(`/api/investigate-ai-analysis/?ip=${encodeURIComponent(currentSelectedIp)}`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}',
+            },
+            body: JSON.stringify({
+                ip: currentSelectedIp,
+                context: itemData || {}
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (loadingSec) loadingSec.classList.add("hidden");
+
+            if (data.status === "success") {
+                // Populate AI narrative
+                document.getElementById("aiNarrativeText").innerHTML = data.ai_narrative || "";
+
+                // Populate recommendations
+                const recList = document.getElementById("aiRecommendationsList");
+                recList.innerHTML = "";
+                if (data.ai_recommendations && data.ai_recommendations.length > 0) {
+                    data.ai_recommendations.forEach(rec => {
+                        const li = document.createElement("li");
+                        li.innerHTML = rec;
+                        recList.appendChild(li);
+                    });
+                }
+
+                if (narrativeSec) narrativeSec.classList.remove("hidden");
+            } else {
+                // Show error state
+                document.getElementById("aiErrorMessage").innerText = data.message || "Terjadi kesalahan saat menganalisis.";
+                if (errorSec) errorSec.classList.remove("hidden");
+            }
+
+            // Reset button
             if (btn) {
                 btn.disabled = false;
                 btn.classList.remove("opacity-75", "cursor-not-allowed");
-                if (btnIcon) btnIcon.innerText = "⚡";
-                if (btnText) btnText.innerText = "Analisis AI";
             }
-        }, customDuration);
+            if (btnIcon) btnIcon.innerText = "⚡";
+            if (btnText) btnText.innerText = "Analisis AI";
+        })
+        .catch(err => {
+            if (loadingSec) loadingSec.classList.add("hidden");
+            document.getElementById("aiErrorMessage").innerText = "Gagal terhubung ke server AI. Pastikan koneksi stabil dan coba lagi.";
+            if (errorSec) errorSec.classList.remove("hidden");
+
+            if (btn) {
+                btn.disabled = false;
+                btn.classList.remove("opacity-75", "cursor-not-allowed");
+            }
+            if (btnIcon) btnIcon.innerText = "⚡";
+            if (btnText) btnText.innerText = "Analisis AI";
+            console.error("AI Analysis error:", err);
+        });
     }
 </script>
 {% endblock %}

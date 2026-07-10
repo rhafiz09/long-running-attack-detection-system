@@ -19,4 +19,5 @@ urlpatterns = [
     # Investigation Dashboard & AI Analysis API
     path("investigation/", views.investigation_dashboard_view, name="investigation_dashboard"),
     path("api/investigate-ip/", views.investigate_ip_api, name="investigate_ip_api"),
+    path("api/investigate-ai-analysis/", views.investigate_ai_analysis_api, name="investigate_ai_analysis_api"),
 ]

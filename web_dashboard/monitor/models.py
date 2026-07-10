@@ -1,6 +1,23 @@
 from django.db import models
 
 
+class SafeJSONField(models.JSONField):
+    """
+    Custom JSONField to safely handle PostgreSQL JSONB values that psycopg driver
+    has already deserialized into Python dict/list/etc.
+    """
+    def from_db_value(self, value, expression, connection):
+        if value is None:
+            return value
+        if isinstance(value, (dict, list, int, float, bool)):
+            return value
+        try:
+            return super().from_db_value(value, expression, connection)
+        except TypeError:
+            return value
+
+
+
 class BaseFirewallLog(models.Model):
     """
     Abstract Django ORM Model for Cybersecurity Firewall Logs.
@@ -24,7 +41,7 @@ class BaseFirewallLog(models.Model):
     country_impacted = models.CharField(max_length=100, null=True, blank=True)
     rule_name = models.CharField(max_length=255, null=True, blank=True)
     classification = models.CharField(max_length=255, null=True, blank=True, db_index=True)
-    additional_data = models.JSONField(default=dict, null=True, blank=True)
+    additional_data = SafeJSONField(default=dict, null=True, blank=True)
 
     class Meta:
         abstract = True
@@ -79,7 +96,7 @@ class AIThreatAlert(models.Model):
     label = models.IntegerField(db_index=True)  # 0: Normal, 1: Reconnaissance, 2: Lateral Movement, 3: Beaconing
     threat_name = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     confidence_score = models.FloatField()
-    sequence_metadata = models.JSONField(default=dict, null=True, blank=True)
+    sequence_metadata = SafeJSONField(default=dict, null=True, blank=True)
 
     class Meta:
         managed = False

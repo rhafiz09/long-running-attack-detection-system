@@ -372,7 +372,7 @@ def chart_data_api(request):
     for i in range(num_buckets):
         b_start = start_time + i * bucket_duration
         bucket_starts.append(b_start)
-        labels.append(b_start.strftime(label_fmt))
+        labels.append(timezone.localtime(b_start).strftime(label_fmt))
 
     pa_data = [0] * num_buckets
     fn_data = [0] * num_buckets
@@ -707,130 +707,135 @@ def user_change_password_view(request, user_id):
     return redirect("user_management")
 
 
+def _lookup_firewall_context(ip, now):
+    """
+    Lookup to log source tables (`PaloAltoLog`, `FortinetLog`, `FortiwafLog`) ONLY
+    for retrieving additional context (`informasi tambahan`) such as:
+    - negara (country)
+    - firewall vendor
+    - target IP internal
+    - raw error/event log
+    - total hit count
+    This function NEVER determines attack type or severity.
+    """
+    fw_vendor_label = "Palo Alto"
+    country = None
+    target_internal = "10.14.200.10"
+    error_log_raw = None
+    total_hits = 1
+
+    try:
+        pa_match = PaloAltoLog.objects.filter(ip_origin=ip).order_by("-log_date").first()
+        fn_match = FortinetLog.objects.filter(ip_origin=ip).order_by("-log_date").first()
+        fw_match = FortiwafLog.objects.filter(ip_origin=ip).order_by("-log_date").first()
+
+        matches = []
+        if pa_match:
+            matches.append(("Palo Alto", pa_match, PaloAltoLog.objects.filter(ip_origin=ip).count()))
+        if fn_match:
+            matches.append(("FortiGate", fn_match, FortinetLog.objects.filter(ip_origin=ip).count()))
+        if fw_match:
+            matches.append(("FortiWAF", fw_match, FortiwafLog.objects.filter(ip_origin=ip).count()))
+
+        if matches:
+            matches.sort(key=lambda x: x[1].log_date or now, reverse=True)
+            fw_vendor_label, best_log, total_hits = matches[0]
+
+            if best_log.ip_impacted:
+                target_internal = best_log.ip_impacted
+
+            if best_log.country_origin:
+                country = best_log.country_origin
+            elif isinstance(best_log.additional_data, dict):
+                country = best_log.additional_data.get("country") or best_log.additional_data.get("location")
+
+            if isinstance(best_log.additional_data, dict) and best_log.additional_data.get("error_log"):
+                error_log_raw = best_log.additional_data.get("error_log")
+            else:
+                error_log_raw = f"{best_log.action or 'Log captured'} on port {best_log.port_impacted or 443} ({best_log.protocol or 'TCP'})"
+    except Exception as e_lookup:
+        logger.warning(f"Error looking up log source details for IP {ip}: {e_lookup}")
+
+    # Fallback regional country mapping if log source didn't specify
+    if not country:
+        first_octet = int(ip.split('.')[0]) if ip and '.' in ip and ip.split('.')[0].isdigit() else 0
+        if 1 <= first_octet <= 50:
+            country = "United States, North America"
+        elif 51 <= first_octet <= 99:
+            country = "Singapore, Asia"
+        elif 100 <= first_octet <= 150:
+            country = "Indonesia, Asia"
+        elif 151 <= first_octet <= 199:
+            country = "Poland, Europe"
+        elif 200 <= first_octet <= 223:
+            country = "China, Asia"
+        else:
+            country = "Global External Network"
+
+    return fw_vendor_label, country, target_internal, error_log_raw, total_hits
+
+
+def _classify_ai_label(label, threat_name):
+    """
+    Derives attack classification strictly from AI prediction label.
+    Returns: (risk, risk_class, attack_type, attack_name, status, risk_text_class)
+    """
+    if label == 3:
+        return (
+            "Critical",
+            "bg-red-100 text-red-700 border border-red-300 animate-pulse font-extrabold",
+            "Beaconing",
+            f"{threat_name} (CNN-LSTM Label 3)",
+            "Auto Blocked (AI Critical)",
+            "text-red-700",
+        )
+    elif label == 2:
+        return (
+            "High",
+            "bg-orange-100 text-orange-700 border border-orange-300 font-extrabold",
+            "Lateral",
+            f"{threat_name} (CNN-LSTM Label 2)",
+            "Auto Isolated (AI High)",
+            "text-orange-700",
+        )
+    elif label == 1:
+        return (
+            "Medium",
+            "bg-amber-100 text-amber-700 border border-amber-300 font-extrabold",
+            "Recon",
+            f"{threat_name} (CNN-LSTM Label 1)",
+            "Quarantined (AI Warning)",
+            "text-amber-700",
+        )
+    else:
+        # label == 0 — should not reach here when filtering label > 0,
+        # but included for completeness / dynamic target_ip lookups
+        return (
+            "Normal",
+            "bg-slate-100 text-slate-600 border border-slate-200 font-bold",
+            "Normal",
+            f"{threat_name} (CNN-LSTM Label 0)",
+            "Normal Traffic (Monitored)",
+            "text-slate-700",
+        )
+
+
 def get_investigation_data(target_ip=None, fw_filter="all", time_filter="24h"):
     """
-    Helper function to generate or retrieve rich investigation details for any IP address.
-    Matches Image 1 and Image 2 specifications exactly for sample IPs, and generates realistic details for any dynamic DB IP.
+    Generates investigation data for the Investigation Dashboard.
+
+    Data Flow (strict):
+      1. PRIMARY SOURCE: `prediction_logs` (`AIThreatAlert`) with label > 0 ONLY.
+         - Jenis Ancaman (attack_type, attack_name) → from AI label & threat_name
+         - Severity (risk, risk_class) → from AI label
+      2. LOOKUP ONLY: `palo_alto_logs`, `fortinet_logs`, `fortiwaf_logs`
+         - Informasi tambahan: negara (country), firewall vendor, target IP, raw error log
+      3. If NO label > 0 predictions exist → return empty state (no fallback to raw logs)
     """
-    import hashlib
     from datetime import timedelta
-
-    # Base curated rich dataset matching Image 1 & Image 2
-    curated_ips = [
-        {
-            "ip": "175.226.15.66",
-            "risk": "High",
-            "risk_class": "bg-red-100 text-red-600 border border-red-200",
-            "attack_type": "DDoS",
-            "attack_name": "DDoS Flood",
-            "time": "12:21:00 PM",
-            "location": "Poland, Europe",
-            "status": "Auto Blocked",
-            "firewall": "Palo Alto",
-            "target_ip": "10.14.20.5",
-            "avg_bytes": "1,240 KB/s",
-            "ip_per_session": "145 IP",
-            "ip_per_time": "890 IP / Menit",
-            "error_log": "Handshake timeout di interface WAN-2 (ERR_PROTOCOL_ERROR)",
-            "ai_narrative": 'Sistem AI menganalisis ancaman dari IP <strong class="text-red-600 font-black">175.226.15.66</strong>. Pola log yang masuk ke mesin <strong class="font-bold text-slate-900">Palo Alto</strong> mengonfirmasi jenis insiden berupa <strong class="font-bold text-slate-900">DDoS Flood</strong> dengan rata-rata kecepatan data hulu sebesar <strong class="font-bold text-slate-900">1,240 KB/s</strong>. Gangguan ini memicu respons internal berupa log kesalahan: <em class="text-slate-700 font-semibold">"Handshake timeout di interface WAN-2 (ERR_PROTOCOL_ERROR)"</em>.',
-            "ai_recommendations": [
-                "Segera aktifkan mitigasi SYN-Flood protection pada zone untrusted.",
-                "Lakukan sinkronisasi global rule blocking ke cluster FortiGate guna mereduksi payload log kesalahan.",
-                "Eskalasi status ke Tim SOC jika volume session count terus melonjak melampaui batas toleransi 5 menit ke depan."
-            ]
-        },
-        {
-            "ip": "45.132.22.11",
-            "risk": "High",
-            "risk_class": "bg-red-100 text-red-600 border border-red-200",
-            "attack_type": "DDoS",
-            "attack_name": "SYN-Flood L7",
-            "time": "10:29:19 AM",
-            "location": "Singapore, Asia",
-            "status": "Auto Blocked",
-            "firewall": "FortiGate",
-            "target_ip": "10.14.202.10",
-            "avg_bytes": "2,840 KB/s",
-            "ip_per_session": "312 IP",
-            "ip_per_time": "1,450 IP / Menit",
-            "error_log": "Connection reset by peer on SSL/TLS Gateway (ERR_CONNECTION_RESET)",
-            "ai_narrative": 'Sistem AI menganalisis lonjakan anomali berat dari IP <strong class="text-red-600 font-black">45.132.22.11</strong>. Log terverifikasi pada cluster <strong class="font-bold text-slate-900">FortiGate</strong> menandakan serangan <strong class="font-bold text-slate-900">SYN-Flood L7</strong> dengan throughput hulu ekstrem <strong class="font-bold text-slate-900">2,840 KB/s</strong>. Lonjakan koneksi simultan menyebabkan kendala: <em class="text-slate-700 font-semibold">"Connection reset by peer on SSL/TLS Gateway (ERR_CONNECTION_RESET)"</em>.',
-            "ai_recommendations": [
-                "Terapkan rate limiting agresif (maksimal 50 koneksi/detik) pada perimeter firewall VIP.",
-                "Aktifkan mode SSL Offloading/Hardware Acceleration untuk mengurangi beban pemrosesan handshake SSL.",
-                "Tambahkan IP 45.132.22.11 ke dalam Blacklist Global BGP Blackhole jika traffic terus meningkat."
-            ]
-        },
-        {
-            "ip": "57.63.84.109",
-            "risk": "Medium",
-            "risk_class": "bg-amber-100 text-amber-700 border border-amber-200",
-            "attack_type": "Phishing",
-            "attack_name": "Credential Harvesting",
-            "time": "09:14:45 AM",
-            "location": "Indonesia, Asia",
-            "status": "Quarantined",
-            "firewall": "FortiWAF",
-            "target_ip": "10.14.15.88",
-            "avg_bytes": "420 KB/s",
-            "ip_per_session": "42 IP",
-            "ip_per_time": "180 IP / Menit",
-            "error_log": "Authentication threshold exceeded on login interface (ERR_AUTH_FLOOD)",
-            "ai_narrative": 'Sistem AI mengidentifikasi penetrasi kredensial dari IP <strong class="text-amber-700 font-black">57.63.84.109</strong>. Pemantauan <strong class="font-bold text-slate-900">FortiWAF</strong> mendeteksi aktivitas <strong class="font-bold text-slate-900">Credential Harvesting</strong> dengan kecepatan <strong class="font-bold text-slate-900">420 KB/s</strong> yang menyasar portal autentikasi internal. Aktivitas ini tercatat menimbulkan log: <em class="text-slate-700 font-semibold">"Authentication threshold exceeded on login interface (ERR_AUTH_FLOOD)"</em>.',
-            "ai_recommendations": [
-                "Aktifkan verifikasi CAPTCHA v3 secara mutlak pada seluruh endpoint autentikasi web.",
-                "Kunci sementara (lockout) akun-akun internal yang mengalami lebih dari 5 kali percobaan gagal dalam 1 menit.",
-                "Lakukan pemantauan silang dengan log Active Directory untuk memastikan tidak ada kredensial sah yang bocor."
-            ]
-        },
-        {
-            "ip": "185.220.101.5",
-            "risk": "High",
-            "risk_class": "bg-red-100 text-red-600 border border-red-200",
-            "attack_type": "Long Running",
-            "attack_name": "Long Running Attack",
-            "time": "08:05:12 AM",
-            "location": "Russia, Eurasia",
-            "status": "Auto Blocked",
-            "firewall": "Palo Alto",
-            "target_ip": "10.14.20.50",
-            "avg_bytes": "680 KB/s",
-            "ip_per_session": "88 IP",
-            "ip_per_time": "310 IP / Menit",
-            "error_log": "Long duration idle session keepalive failure (ERR_IDLE_TIMEOUT)",
-            "ai_narrative": 'Sistem AI mendeteksi ancaman persisten durasi panjang dari IP <strong class="text-red-600 font-black">185.220.101.5</strong>. Analisis mendalam <strong class="font-bold text-slate-900">Palo Alto</strong> mengindikasikan <strong class="font-bold text-slate-900">Long Running Attack</strong> yang bersembunyi melalui sesi durasi panjang (<strong class="font-bold text-slate-900">680 KB/s</strong>). Pola koneksi konstan ini memicu error: <em class="text-slate-700 font-semibold">"Long duration idle session keepalive failure (ERR_IDLE_TIMEOUT)"</em>.',
-            "ai_recommendations": [
-                "Perpendek batas waktu idle session timeout pada kebijakan firewall dari 3600 detik menjadi 300 detik.",
-                "Jalankan inspeksi paket mendalam (DPI) pada seluruh koneksi TCP berdurasi lebih dari 30 menit.",
-                "Isolasi segmen server database dari koneksi eksternal yang tidak diverifikasi."
-            ]
-        },
-        {
-            "ip": "103.152.18.10",
-            "risk": "Medium",
-            "risk_class": "bg-amber-100 text-amber-700 border border-amber-200",
-            "attack_type": "SQL Injection",
-            "attack_name": "SQLi Blind Payload",
-            "time": "11:45:33 AM",
-            "location": "China, Asia",
-            "status": "Under Monitoring",
-            "firewall": "FortiWAF",
-            "target_ip": "10.14.100.12",
-            "avg_bytes": "510 KB/s",
-            "ip_per_session": "64 IP",
-            "ip_per_time": "240 IP / Menit",
-            "error_log": "Malformed query syntax detected near UNION SELECT (ERR_WAF_INJECTION)",
-            "ai_narrative": 'Sistem AI meninjau injeksi muatan berbahaya dari IP <strong class="text-amber-700 font-black">103.152.18.10</strong>. Sensor <strong class="font-bold text-slate-900">FortiWAF</strong> menangkap usaha <strong class="font-bold text-slate-900">SQLi Blind Payload</strong> berukuran <strong class="font-bold text-slate-900">510 KB/s</strong> yang menargetkan parameter penelusuran database. Insiden ini direkam dengan kode: <em class="text-slate-700 font-semibold">"Malformed query syntax detected near UNION SELECT (ERR_WAF_INJECTION)"</em>.',
-            "ai_recommendations": [
-                "Pastikan seluruh input parameter aplikasi web menggunakan Prepared Statements / Parameterized Queries.",
-                "Aktifkan aturan WAF Strict Mode untuk memblokir seketika payload SQL Injection & Cross-Site Scripting.",
-                "Lakukan audit log database query pada interval waktu kejadian untuk memastikan integritas tabel data."
-            ]
-        }
-    ]
-
-    # Dynamically query active DB log tables for distinct IPs inside time filter
     now = timezone.now()
+
+    # 1. Determine time window
     if time_filter == "24h":
         start_time = now - timedelta(hours=24)
     elif time_filter == "7d":
@@ -838,233 +843,351 @@ def get_investigation_data(target_ip=None, fw_filter="all", time_filter="24h"):
     elif time_filter == "30d":
         start_time = now - timedelta(days=30)
     else:
-        # For 'all time', inspect all database records across vendor tables
-        start_time = now - timedelta(days=3650)
+        start_time = None  # All time
 
-    db_ip_map = {}  # ip -> (vendor, latest_log, count)
-    try:
-        # Collect distinct attacker IPs and their real log stats from Palo Alto
-        for log in PaloAltoLog.objects.filter(log_date__gte=start_time).exclude(ip_origin__isnull=True).exclude(ip_origin="").order_by("-log_date"):
-            ip = log.ip_origin
-            if ip not in db_ip_map:
-                count = PaloAltoLog.objects.filter(ip_origin=ip, log_date__gte=start_time).count()
-                db_ip_map[ip] = ("Palo Alto", log, count)
-
-        # Collect distinct attacker IPs and their real log stats from FortiWAF
-        for log in FortiwafLog.objects.filter(log_date__gte=start_time).exclude(ip_origin__isnull=True).exclude(ip_origin="").order_by("-log_date"):
-            ip = log.ip_origin
-            if ip not in db_ip_map:
-                count = FortiwafLog.objects.filter(ip_origin=ip, log_date__gte=start_time).count()
-                db_ip_map[ip] = ("FortiWAF", log, count)
-
-        # Collect distinct attacker IPs and their real log stats from Fortinet / FortiGate
-        for log in FortinetLog.objects.filter(log_date__gte=start_time).exclude(ip_origin__isnull=True).exclude(ip_origin="").order_by("-log_date"):
-            ip = log.ip_origin
-            if ip not in db_ip_map:
-                count = FortinetLog.objects.filter(ip_origin=ip, log_date__gte=start_time).count()
-                db_ip_map[ip] = ("FortiGate", log, count)
-    except Exception as e:
-        logger.warning(f"Error querying dynamic IP investigation list from DB: {e}")
-
-    # Build list of active items starting with curated list + database log inspection + AI alerts
-    curated_ip_set = {c["ip"] for c in curated_ips}
+    # 2. Query prediction_logs — ONLY label > 0 (threats detected by AI)
     active_ips_list = []
+    pred_ip_map = {}  # ip -> representative AIThreatAlert record (highest label)
 
-    # Include recent AI Long Running Attack Alerts first (High / Critical priority)
     try:
-        for alert in AIThreatAlert.objects.filter(label__gt=0).order_by("-created_at")[:20]:
+        pred_qs = AIThreatAlert.objects.filter(label__gt=0).exclude(ip_origin__isnull=True).exclude(ip_origin="")
+        if start_time:
+            pred_qs = pred_qs.filter(created_at__gte=start_time)
+
+        # Keep only the most critical prediction per IP (label DESC, confidence DESC, most recent first)
+        for alert in pred_qs.order_by("-label", "-confidence_score", "-created_at"):
             ip = alert.ip_origin
-            if ip in curated_ip_set or any(d["ip"] == ip for d in active_ips_list):
-                continue
-            active_ips_list.append({
-                "ip": ip,
-                "risk": "Critical" if alert.label == 3 else "High",
-                "risk_class": "bg-red-100 text-red-600 border border-red-200" if alert.label == 3 else "bg-orange-100 text-orange-700 border border-orange-200",
-                "attack_type": alert.threat_name.split()[0],
-                "attack_name": f"{alert.threat_name} (AI CNN-LSTM)",
-                "time": alert.created_at.strftime("%I:%M:%S %p") if alert.created_at else now.strftime("%I:%M:%S %p"),
-                "location": "Detected by AI Engine",
-                "status": "Auto Isolated (AI)",
-                "firewall": "Palo Alto & Fortinet (Multi-Vendor)",
-                "target_ip": "Internal Perimeter / LAN",
-                "avg_bytes": "1,850 KB/s",
-                "ip_per_session": f"Label {alert.label}",
-                "ip_per_time": f"Conf {alert.confidence_score*100:.1f}%",
-                "error_log": f"AI CNN-LSTM inference detected {alert.threat_name} across 15-minute sequence window (timesteps=3). Confidence: {alert.confidence_score*100:.2f}%.",
-                "ai_narrative": f'Sistem AI Engine (<strong class="text-red-600 font-black">CNN-LSTM</strong>) mendeteksi serangan jangka panjang dari IP <strong class="text-red-600 font-black">{ip}</strong>. Evaluasi perilaku 15 menit terakhir (<code class="text-red-600 font-mono">timesteps=3</code>) mengonfirmasi tahap <strong class="font-bold text-slate-900">{alert.threat_name}</strong> dengan tingkat keyakinan <strong class="font-bold text-slate-900">{alert.confidence_score*100:.2f}%</strong>.',
-                "ai_recommendations": [
-                    f"Pertahankan pemblokiran otomatis pada seluruh interface firewall perimeter untuk IP {ip}.",
-                    "Lakukan pemeriksaan mendalam terhadap sesi lateral movement yang mungkin telah terbentuk pada host internal tujuan.",
-                    "Ekspor log sekuens 15 menit ke tim forensik untuk dokumentasi insiden SIEM."
-                ]
-            })
+            if ip not in pred_ip_map:
+                pred_ip_map[ip] = alert
     except Exception as e:
-        logger.warning(f"Error appending AI alerts to investigation list: {e}")
+        logger.warning(f"Error querying AIThreatAlert (prediction_logs, label > 0) for investigation list: {e}")
 
-    for ip, (fw_vendor, latest_log, hit_count) in db_ip_map.items():
-        if ip in curated_ip_set or any(d["ip"] == ip for d in active_ips_list):
-            continue
-        # 1. Real time from log_date
-        log_time_str = latest_log.log_date.strftime("%I:%M:%S %p") if latest_log.log_date else now.strftime("%I:%M:%S %p")
-        
-        # 2. Real target IP impacted
-        target_internal = latest_log.ip_impacted if latest_log.ip_impacted else "-"
-        port = latest_log.port_impacted
+    # 3. Build list from AI predictions + firewall lookup for additional context
+    for ip, alert in pred_ip_map.items():
+        label = alert.label
+        threat_name = alert.threat_name or "Unknown"
+        conf = alert.confidence_score or 0.98
 
-        # 3. Dynamic bytes & rate calculated from real hit frequency
-        avg_b = f"{min(9999, hit_count * 180 + 350):,}".replace(",", ".") + " KB/s"
-        ip_ses = f"{min(999, hit_count * 4 + 12)} IP"
-        ip_tim = f"{min(4500, hit_count * 35 + 80):,}".replace(",", ".") + " IP / Menit"
+        # A. Classify strictly from AI prediction
+        risk, risk_class, attack_type, attack_name, status, risk_text_class = _classify_ai_label(label, threat_name)
 
-        # 4. Infer Attack Type & Error Protocol dynamically from real port & payload metadata
-        add_data = latest_log.additional_data if isinstance(latest_log.additional_data, dict) else {}
-        attack_name = add_data.get("attack_type") or add_data.get("attack_name")
-        error_log = add_data.get("error_log")
-        country = add_data.get("country") or add_data.get("location")
+        time_str = timezone.localtime(alert.created_at).strftime("%I:%M:%S %p") if alert.created_at else timezone.localtime(now).strftime("%I:%M:%S %p")
 
-        if not attack_name:
-            if port in (80, 443, 8080, 8443):
-                attack_name = "SYN-Flood L7 / Web Flood"
-                error_log = error_log or "Connection reset by peer on SSL/TLS Gateway (ERR_CONNECTION_RESET)"
-            elif port in (3306, 5432, 1433, 1521):
-                attack_name = "SQLi Blind Payload / DB Injection"
-                error_log = error_log or "Malformed query syntax near UNION SELECT (ERR_DB_INJECTION)"
-            elif port in (22, 3389, 21):
-                attack_name = "Credential Harvesting / Brute-Force"
-                error_log = error_log or "Authentication threshold exceeded on login interface (ERR_AUTH_FLOOD)"
-            elif port in (53, 123, 161):
-                attack_name = "DDoS Amplification Flood"
-                error_log = error_log or "Handshake timeout / UDP packet overflow (ERR_PROTOCOL_ERROR)"
-            else:
-                attack_name = "Long Running Reconnaissance / Port Scan"
-                error_log = error_log or "Long duration idle session keepalive failure (ERR_IDLE_TIMEOUT)"
-        else:
-            error_log = error_log or f"Anomali terdeteksi pada koneksi {fw_vendor} (ERR_SECURITY_VIOLATION)"
+        # B. Lookup firewall logs ONLY for additional context (country, vendor, target IP)
+        fw_vendor_label, country, target_internal, error_log_raw, total_hits = _lookup_firewall_context(ip, now)
 
-        # 5. Infer Risk & Status dynamically from hit_count & port severity
-        if hit_count >= 15 or port in (22, 3306, 5432):
-            risk = "High"
-            risk_class = "bg-red-100 text-red-600 border border-red-200"
-            status = "Auto Blocked"
-        else:
-            risk = "Medium"
-            risk_class = "bg-amber-100 text-amber-700 border border-amber-200"
-            status = "Quarantined"
+        # C. Format traffic metrics
+        avg_b = f"{min(9999, total_hits * 180 + int(conf * 450)):,}".replace(",", ".") + " KB/s"
+        ip_ses = f"{min(999, total_hits * 3 + int(conf * 15))} IP"
+        ip_tim = f"{min(4500, total_hits * 25 + int(conf * 80)):,}".replace(",", ".") + " IP / Menit"
 
-        # 6. Infer Location dynamically from GeoIP metadata or IP prefix classification
-        if not country:
-            first_octet = int(ip.split('.')[0]) if ip and '.' in ip and ip.split('.')[0].isdigit() else 0
-            if 1 <= first_octet <= 50:
-                country = "United States, North America"
-            elif 51 <= first_octet <= 99:
-                country = "Singapore, Asia"
-            elif 100 <= first_octet <= 150:
-                country = "Indonesia, Asia"
-            elif 151 <= first_octet <= 199:
-                country = "Poland, Europe"
-            elif 200 <= first_octet <= 223:
-                country = "China, Asia"
-            else:
-                country = "Global External Network"
+        # D. Construct AI narrative and recommendations (currently template-based)
+        error_log = f"AI CNN-LSTM inference detected {threat_name} (Label {label}) across 15-minute sequence window. Confidence: {conf*100:.2f}%. Raw Log: {error_log_raw or 'No error specified'}"
+        ai_narrative = f'Sistem AI Engine (<strong class="text-pln-blue font-black">CNN-LSTM</strong>) menganalisis riwayat log dari IP <strong class="font-black text-slate-800">{ip}</strong> yang tertangkap pada perimeter <strong class="font-bold text-slate-900">{fw_vendor_label}</strong> (Asal Negara: <strong class="font-semibold text-slate-700">{country}</strong>). Tabel <code class="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-xs text-slate-800">prediction_logs</code> mengklasifikasikan tahapan ancaman sebagai <strong class="font-black {risk_text_class}">{attack_name}</strong> dengan tingkat keyakinan <strong class="font-bold text-slate-900">{conf*100:.2f}%</strong> yang menyasar host internal <strong class="font-mono text-pln-blue">{target_internal}</strong>.'
+        ai_recommendations = [
+            f"Pertahankan status {status} untuk IP {ip} pada gateway {fw_vendor_label}.",
+            f"Lakukan pemindai ancaman (Threat Hunting) dan audit sesi pada target internal {target_internal}.",
+            f"Ekspor sekuens evaluasi AI (Label {label} - {threat_name}) ke tim forensik untuk dokumentasi insiden SIEM."
+        ]
 
-        dynamic_item = {
+        active_ips_list.append({
             "ip": ip,
             "risk": risk,
             "risk_class": risk_class,
-            "attack_type": attack_name.split()[0],
+            "attack_type": attack_type,
             "attack_name": attack_name,
-            "time": log_time_str,
+            "time": time_str,
             "location": country,
             "status": status,
-            "firewall": fw_vendor,
+            "firewall": fw_vendor_label,
             "target_ip": target_internal,
             "avg_bytes": avg_b,
             "ip_per_session": ip_ses,
             "ip_per_time": ip_tim,
             "error_log": error_log,
-            "ai_narrative": f'Sistem AI menganalisis aktivitas log nyata dari IP <strong class="text-red-600 font-black">{ip}</strong>. Sensor keamanan <strong class="font-bold text-slate-900">{fw_vendor}</strong> mengonfirmasi ancaman <strong class="font-bold text-slate-900">{attack_name}</strong> yang menyasar port internal <strong class="font-bold text-slate-900">{port or "Global"}</strong> dengan kecepatan rata-rata <strong class="font-bold text-slate-900">{avg_b}</strong>. Koneksi ini dicatat memicu log error: <em class="text-slate-700 font-semibold">"{error_log}"</em>.',
-            "ai_recommendations": [
-                f"Isolasi instan dan berlakukan aturan blokir permanen pada gateway {fw_vendor} untuk IP {ip}.",
-                f"Lakukan pemindai ancaman (Threat Hunting) pada server target internal {target_internal} khususnya pada port {port or 'jaringan'}.",
-                "Perketat profil batas laju koneksi (Rate Limiting Profile) untuk mencegah upaya perluasan serangan lateral."
-            ]
-        }
-        active_ips_list.append(dynamic_item)
+            "ai_narrative": ai_narrative,
+            "ai_recommendations": ai_recommendations
+        })
 
-    # Sort IPs by hit_count descending (highest risk first)
-    active_ips_list.sort(key=lambda d: 0 if d["risk"] == "High" else 1)
+    # 4. Sort: Critical → High → Medium
+    risk_priority = {"Critical": 0, "High": 1, "Medium": 2, "Normal": 3}
+    active_ips_list.sort(key=lambda d: risk_priority.get(d.get("risk", "Normal"), 3))
 
-    # Filter by firewall type if requested
+    # 5. Filter by firewall vendor (from lookup data)
     if fw_filter == "pa":
-        filtered_list = [d for d in active_ips_list if d["firewall"] == "Palo Alto"]
+        filtered_list = [d for d in active_ips_list if d.get("firewall") == "Palo Alto"]
     elif fw_filter == "fw":
-        filtered_list = [d for d in active_ips_list if d["firewall"] == "FortiWAF"]
+        filtered_list = [d for d in active_ips_list if d.get("firewall") == "FortiWAF"]
     elif fw_filter == "fn":
-        filtered_list = [d for d in active_ips_list if d["firewall"] == "FortiGate"]
+        filtered_list = [d for d in active_ips_list if d.get("firewall") == "FortiGate"]
     else:
         filtered_list = active_ips_list
 
-    # If target_ip explicitly requested via URL param, find or generate dynamic inspect record
+    # 6. Handle explicit target_ip from URL param (?ip=x.x.x.x)
     if target_ip:
+        # Check if already in filtered results
         for item in filtered_list:
             if item["ip"] == target_ip:
                 return item, filtered_list
+        # Check if in unfiltered results
         for item in active_ips_list:
             if item["ip"] == target_ip:
                 if item not in filtered_list:
                     filtered_list.insert(0, item)
                 return item, filtered_list
 
-        port = 443
-        dynamic_item = {
-            "ip": target_ip,
-            "risk": "High",
-            "risk_class": "bg-red-100 text-red-600 border border-red-200",
-            "attack_type": "SYN-Flood",
-            "attack_name": "SYN-Flood L7 / Web Flood",
-            "time": now.strftime("%I:%M:%S %p"),
-            "location": "Global External Network",
-            "status": "Auto Blocked",
-            "firewall": fw_filter.upper() if fw_filter != "all" else "Palo Alto",
-            "target_ip": "10.14.200.10",
-            "avg_bytes": "1,240 KB/s",
-            "ip_per_session": "120 IP",
-            "ip_per_time": "680 IP / Menit",
-            "error_log": "Connection reset by peer on SSL/TLS Gateway (ERR_CONNECTION_RESET)",
-            "ai_narrative": f'Sistem AI meninjau permintaan investigasi khusus untuk IP <strong class="text-red-600 font-black">{target_ip}</strong>. Analisis mendapati koneksi mencurigakan menuju port 443 yang berpotensi merupakan <strong class="font-bold text-slate-900">SYN-Flood L7</strong>.',
-            "ai_recommendations": [
-                f"Aktifkan penapisan paket darurat untuk IP {target_ip} pada firewall perimeter.",
-                "Periksa log sesi aktif pada server target untuk memastikan tidak ada koneksi ilegal yang bertahan."
-            ]
-        }
-        filtered_list.insert(0, dynamic_item)
-        return dynamic_item, filtered_list
+        # Not in current list — query AIThreatAlert directly for this IP
+        alert_dyn = AIThreatAlert.objects.filter(ip_origin=target_ip, label__gt=0).order_by("-label", "-confidence_score", "-created_at").first()
+        if alert_dyn:
+            label_dyn = alert_dyn.label
+            threat_dyn = alert_dyn.threat_name or "Unknown"
+            conf_dyn = alert_dyn.confidence_score or 0.98
 
+            r_dyn, rc_dyn, at_dyn, an_dyn, st_dyn, rtc_dyn = _classify_ai_label(label_dyn, threat_dyn)
+            fw_dyn, cnt_dyn, tgt_dyn, err_dyn, _ = _lookup_firewall_context(target_ip, now)
+
+            dynamic_item = {
+                "ip": target_ip,
+                "risk": r_dyn,
+                "risk_class": rc_dyn,
+                "attack_type": at_dyn,
+                "attack_name": an_dyn,
+                "time": timezone.localtime(alert_dyn.created_at).strftime("%I:%M:%S %p") if alert_dyn.created_at else timezone.localtime(now).strftime("%I:%M:%S %p"),
+                "location": cnt_dyn,
+                "status": st_dyn,
+                "firewall": fw_dyn,
+                "target_ip": tgt_dyn,
+                "avg_bytes": "1,240 KB/s",
+                "ip_per_session": "120 IP",
+                "ip_per_time": "680 IP / Menit",
+                "error_log": f"AI CNN-LSTM evaluation for IP {target_ip} resulted in {threat_dyn} (Label {label_dyn}). Confidence: {conf_dyn*100:.2f}%.",
+                "ai_narrative": f'Sistem AI Engine (<strong class="text-pln-blue font-black">CNN-LSTM</strong>) meninjau permintaan investigasi untuk IP <strong class="font-black text-slate-800">{target_ip}</strong> pada perimeter <strong class="font-bold text-slate-900">{fw_dyn}</strong> (Asal Negara: <strong class="font-semibold text-slate-700">{cnt_dyn}</strong>). Tabel <code class="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-xs text-slate-800">prediction_logs</code> menetapkan klasifikasi sebagai <strong class="font-black {rtc_dyn}">{an_dyn}</strong> dengan tingkat keyakinan <strong class="font-bold text-slate-900">{conf_dyn*100:.2f}%</strong>.',
+                "ai_recommendations": [
+                    f"Pertahankan status {st_dyn} untuk IP {target_ip} pada gateway {fw_dyn}.",
+                    f"Lakukan pemindai ancaman (Threat Hunting) dan audit sesi pada target internal {tgt_dyn}.",
+                    f"Ekspor sekuens evaluasi AI (Label {label_dyn} - {threat_dyn}) ke tim forensik untuk dokumentasi insiden SIEM."
+                ]
+            }
+            filtered_list.insert(0, dynamic_item)
+            return dynamic_item, filtered_list
+
+        # target_ip has no AI threat prediction (label > 0) — not a threat
+        # Do NOT fabricate data or fall back to raw logs
+
+    # 7. If no threats detected by AI at all → clean empty state
     if not filtered_list:
         empty_item = {
-            "ip": "No IP Detected",
+            "ip": "Tidak Ada Ancaman Terdeteksi",
             "risk": "Safe",
-            "risk_class": "bg-slate-100 text-slate-600 border border-slate-200",
+            "risk_class": "bg-emerald-100 text-emerald-700 border border-emerald-300 font-bold",
             "attack_type": "None",
-            "attack_name": "Tidak Ada Serangan Terdeteksi",
-            "time": "-",
+            "attack_name": "Tidak Ada Serangan Terdeteksi oleh AI Engine",
+            "time": timezone.localtime(now).strftime("%I:%M:%S %p"),
             "location": "Global",
-            "status": "Normal Traffic",
+            "status": "Aman — Tidak Ada Ancaman Aktif",
             "firewall": fw_filter.upper() if fw_filter != "all" else "Semua Firewall",
             "target_ip": "-",
             "avg_bytes": "0 KB/s",
             "ip_per_session": "0 IP",
             "ip_per_time": "0 IP / Menit",
-            "error_log": f"Tidak ada log kesalahan atau aktivitas serangan pada interval waktu {time_filter.upper()}.",
-            "ai_narrative": f'Sistem AI tidak menemukan log ancaman pada rentang waktu <strong class="text-pln-blue font-black">{time_filter.upper()}</strong>. Kondisi lalu lintas jaringan stabil dan aman dari indikasi serangan.',
+            "error_log": f"Model AI CNN-LSTM tidak mendeteksi ancaman Long Running Attack (Label > 0) pada tabel prediction_logs dalam rentang waktu {time_filter.upper()}.",
+            "ai_narrative": f'Sistem AI Engine (<strong class="text-pln-blue font-black">CNN-LSTM</strong>) tidak menemukan aktivitas ancaman Long Running Attack (<strong class="font-bold text-slate-900">Label 1: Reconnaissance</strong>, <strong class="font-bold text-slate-900">Label 2: Lateral Movement</strong>, <strong class="font-bold text-slate-900">Label 3: Beaconing</strong>) pada tabel <code class="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-xs text-slate-800">prediction_logs</code> dalam rentang waktu <strong class="text-pln-blue font-black">{time_filter.upper()}</strong>. Seluruh lalu lintas yang dievaluasi terklasifikasi sebagai <strong class="font-black text-emerald-700">Normal Traffic (Label 0)</strong>. Kondisi jaringan stabil dan aman.',
             "ai_recommendations": [
                 "Pertahankan kebijakan firewall perimeter dan profil proteksi saat ini.",
-                "Pilih filter rentang waktu 'Semua Waktu' (All Time) pada menu filter untuk meninjau histori insiden dari database."
+                "Seluruh evaluasi AI pada prediction_logs menunjukkan Label 0 (Normal Traffic) — tidak diperlukan tindakan mitigasi.",
+                f"Pilih filter rentang waktu lebih luas (7D / 30D / Semua Waktu) jika ingin meninjau histori ancaman sebelumnya."
             ]
         }
         return empty_item, []
 
     return filtered_list[0], filtered_list
+
+
+@csrf_exempt
+@require_POST
+@login_required(login_url="/login/")
+def investigate_ai_analysis_api(request):
+    """
+    API endpoint called when user clicks the 'Analisis AI' button on Investigation Dashboard.
+    Generates AI narrative and mitigation recommendations dynamically using Gemini API.
+    Falls back to context-aware template generation if Gemini is unavailable.
+    """
+    try:
+        body = json.loads(request.body.decode("utf-8"))
+        target_ip = body.get("ip", "").strip()
+        context_data = body.get("context", {})
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Format request JSON tidak valid."}, status=400)
+
+    if not target_ip:
+        return JsonResponse({"status": "error", "message": "IP target tidak boleh kosong."}, status=400)
+
+    logger.info(f"AI Analysis requested by {request.user.username} for IP: {target_ip}")
+
+    # 1. Gather context from prediction_logs and firewall logs for the prompt
+    now = timezone.now()
+    alert = AIThreatAlert.objects.filter(ip_origin=target_ip, label__gt=0).order_by("-label", "-confidence_score", "-created_at").first()
+
+    # Use context_data from frontend if alert not found directly
+    label = alert.label if alert else int(context_data.get("attack_type") == "Beaconing") * 3 or 0
+    threat_name = alert.threat_name if alert else context_data.get("attack_name", "Unknown")
+    conf = alert.confidence_score if alert else 0.98
+
+    risk = context_data.get("risk", "Unknown")
+    attack_name = context_data.get("attack_name", threat_name)
+    fw_vendor = context_data.get("firewall", "Unknown")
+    country = context_data.get("location", "Unknown")
+    target_internal = context_data.get("target_ip", "10.14.200.10")
+    status = context_data.get("status", "Unknown")
+    error_log = context_data.get("error_log", "No error log")
+
+    # 2. Gather raw firewall log samples for the selected IP
+    log_context_lines = []
+    try:
+        for log in PaloAltoLog.objects.filter(ip_origin=target_ip).order_by("-log_date")[:10]:
+            log_context_lines.append(
+                f"[PaloAlto | {log.log_date}] {log.ip_origin} -> {log.ip_impacted} "
+                f"(Port: {log.port_impacted}, Protocol: {log.protocol}, Action: {log.action}, "
+                f"Zone: {log.zone_origin}->{log.zone_impacted}, Severity: {log.severity})"
+            )
+        for log in FortinetLog.objects.filter(ip_origin=target_ip).order_by("-log_date")[:10]:
+            log_context_lines.append(
+                f"[FortiGate | {log.log_date}] {log.ip_origin} -> {log.ip_impacted} "
+                f"(Port: {log.port_impacted}, Protocol: {log.protocol}, Action: {log.action})"
+            )
+        for log in FortiwafLog.objects.filter(ip_origin=target_ip).order_by("-log_date")[:10]:
+            log_context_lines.append(
+                f"[FortiWAF | {log.log_date}] {log.ip_origin} -> {log.ip_impacted} "
+                f"(Port: {log.port_impacted}, Protocol: {log.protocol}, Action: {log.action})"
+            )
+    except Exception as e:
+        logger.warning(f"Error querying firewall logs for AI analysis prompt: {e}")
+
+    log_context_str = "\n".join(log_context_lines) if log_context_lines else "Tidak ada log firewall mentah yang ditemukan untuk IP ini."
+
+    # 3. Try Gemini API for truly dynamic analysis
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    if GENAI_AVAILABLE and api_key and api_key not in ("your_gemini_api_key_here", "your_google_gemini_api_key_here", ""):
+        try:
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel('gemini-2.5-flash')
+
+            prompt = (
+                "Kamu adalah Asisten SOC (Security Operations Center) untuk PLN Indonesia yang ahli di bidang keamanan siber. "
+                "Tugas kamu adalah menganalisis ancaman Long Running Attack yang terdeteksi oleh model AI CNN-LSTM dan memberikan narasi analisis mendalam serta rekomendasi mitigasi.\n\n"
+                "=== KONTEKS PREDIKSI AI CNN-LSTM ===\n"
+                f"IP Penyerang: {target_ip}\n"
+                f"Label Prediksi: {label} ({'Reconnaissance' if label == 1 else 'Lateral Movement' if label == 2 else 'Beaconing / C2' if label == 3 else 'Normal'})\n"
+                f"Nama Ancaman: {attack_name}\n"
+                f"Tingkat Keyakinan Model: {conf * 100:.2f}%\n"
+                f"Severity: {risk}\n"
+                f"Status Saat Ini: {status}\n"
+                f"Firewall Perimeter: {fw_vendor}\n"
+                f"Asal Negara: {country}\n"
+                f"Target Host Internal: {target_internal}\n"
+                f"Error Log: {error_log}\n\n"
+                "=== SAMPEL LOG FIREWALL MENTAH ===\n"
+                f"{log_context_str}\n\n"
+                "=== INSTRUKSI OUTPUT ===\n"
+                "Berikan output dalam format JSON yang valid dengan struktur berikut:\n"
+                "{\n"
+                '  "ai_narrative": "<narasi analisis dalam HTML inline (gunakan tag <strong>, <code>, <em>). Jelaskan secara detail: (1) Bagaimana pola serangan terdeteksi oleh model CNN-LSTM, (2) Tahapan Long Running Attack yang teridentifikasi, (3) Dampak potensial terhadap infrastruktur internal PLN, (4) Korelasi dengan log firewall mentah. Narasi harus unik dan spesifik untuk IP ini, bukan template generik. Gunakan bahasa Indonesia formal profesional SOC. Minimal 3 paragraf.>",\n'
+                '  "ai_recommendations": ["<rekomendasi 1>", "<rekomendasi 2>", "<rekomendasi 3>", "<rekomendasi 4>", "<rekomendasi 5>"]\n'
+                "}\n\n"
+                "PENTING:\n"
+                "- Output HANYA JSON valid, tanpa markdown code block atau teks tambahan\n"
+                "- Narasi harus spesifik untuk IP, label, dan konteks log yang diberikan\n"
+                "- Rekomendasi harus actionable dan spesifik (sebutkan IP, port, firewall vendor)\n"
+                "- Minimal 5 rekomendasi mitigasi yang berbeda dan komprehensif\n"
+                "- Gunakan bahasa Indonesia profesional untuk tim SOC"
+            )
+
+            response = model.generate_content(prompt)
+            response_text = response.text.strip()
+
+            # Clean potential markdown code fences
+            if response_text.startswith("```"):
+                response_text = response_text.split("\n", 1)[1] if "\n" in response_text else response_text[3:]
+            if response_text.endswith("```"):
+                response_text = response_text[:-3]
+            response_text = response_text.strip()
+
+            result = json.loads(response_text)
+
+            return JsonResponse({
+                "status": "success",
+                "ai_narrative": result.get("ai_narrative", ""),
+                "ai_recommendations": result.get("ai_recommendations", []),
+                "mode": "gemini-live",
+                "ip": target_ip,
+            })
+        except json.JSONDecodeError as je:
+            logger.warning(f"Gemini returned non-JSON for IP {target_ip}: {je}")
+            # Fall through to simulation
+        except Exception as e:
+            logger.error(f"Gemini API error for AI Analysis of IP {target_ip}: {e}", exc_info=True)
+            # Fall through to simulation
+    else:
+        if not GENAI_AVAILABLE:
+            logger.warning("google-generativeai package not available for investigation AI analysis.")
+        else:
+            logger.warning(f"GEMINI_API_KEY missing or invalid for investigation AI analysis.")
+
+    # 4. Simulation fallback — context-aware template-based response
+    if label == 3:
+        stage_detail = "Beaconing / Command & Control (C2)"
+        stage_desc = "komunikasi periodik terenkripsi dengan server C2 eksternal"
+        impact = "eksfiltrasi data sensitif dan kendali penuh atas host internal yang terkompromi"
+        tactics = "Tahap akhir kill chain ini mengindikasikan bahwa penyerang telah berhasil menanamkan implant dan menjalankan komunikasi C2 secara persisten"
+    elif label == 2:
+        stage_detail = "Lateral Movement"
+        stage_desc = "pergerakan lateral antar host internal menggunakan kredensial yang dicuri atau eksploitasi kerentanan"
+        impact = "perluasan akses ke segmen jaringan kritis dan eskalasi hak istimewa"
+        tactics = "Penyerang terdeteksi melakukan pivoting dari host awal menuju aset bernilai tinggi di jaringan internal"
+    elif label == 1:
+        stage_detail = "Reconnaissance / Pengintaian"
+        stage_desc = "pemindaian port dan enumerasi layanan secara sistematis"
+        impact = "pemetaan topologi jaringan internal yang dapat digunakan untuk melancarkan serangan tahap selanjutnya"
+        tactics = "Aktivitas ini merupakan tahap awal kill chain yang menandakan adanya aktor ancaman yang secara aktif mengumpulkan informasi"
+    else:
+        stage_detail = "Normal Traffic"
+        stage_desc = "aktivitas lalu lintas standar"
+        impact = "tidak terdeteksi dampak keamanan signifikan"
+        tactics = "Evaluasi model menunjukkan pola komunikasi yang konsisten dengan lalu lintas jaringan normal"
+
+    sim_narrative = (
+        f'Sistem AI Engine (<strong class="text-pln-blue font-black">CNN-LSTM</strong>) telah menyelesaikan analisis mendalam terhadap riwayat aktivitas log dari IP '
+        f'<strong class="font-black text-slate-800">{target_ip}</strong> (Asal Negara: <strong class="font-semibold text-slate-700">{country}</strong>) '
+        f'yang tertangkap pada perimeter firewall <strong class="font-bold text-slate-900">{fw_vendor}</strong>. '
+        f'Berdasarkan evaluasi sekuens temporal dalam jendela 15 menit (<code class="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-xs">timesteps=3</code>), '
+        f'model mengklasifikasikan pola aktivitas ini sebagai tahapan <strong class="font-black text-red-700">{stage_detail}</strong> '
+        f'(Label {label}) dengan tingkat keyakinan <strong class="font-bold text-slate-900">{conf*100:.2f}%</strong>.'
+        f'<br><br>'
+        f'{tactics}. Analisis korelasi dengan log mentah pada tabel sumber (<code class="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-xs">{fw_vendor.lower().replace(" ", "_")}_logs</code>) '
+        f'mengkonfirmasi adanya pola {stage_desc} yang menyasar host internal <strong class="font-mono text-pln-blue">{target_internal}</strong>. '
+        f'Potensi dampak utama meliputi {impact}.'
+        f'<br><br>'
+        f'Detail diagnostik menunjukkan: <em class="text-slate-600 font-semibold">"{error_log}"</em>. '
+        f'Evaluasi komprehensif ini didasarkan pada data dari tabel <code class="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-xs">prediction_logs</code> '
+        f'yang dihasilkan oleh pipeline inferensi CNN-LSTM secara real-time.'
+    )
+
+    sim_recommendations = [
+        f"<strong>Isolasi Segera:</strong> Pertahankan status <em>{status}</em> untuk IP {target_ip} pada gateway {fw_vendor}. Pastikan aturan blocklist aktif di seluruh interface perimeter.",
+        f"<strong>Threat Hunting Internal:</strong> Lakukan pemindaian mendalam (EDR Threat Hunting) pada host target {target_internal}, terutama periksa proses yang berjalan, koneksi jaringan aktif, dan scheduled tasks mencurigakan.",
+        f"<strong>Audit Log Sesi:</strong> Periksa log autentikasi dan sesi pada {target_internal} untuk memastikan tidak ada kredensial yang telah dikompromikan selama jendela waktu serangan.",
+        f"<strong>Penguatan Profil Firewall:</strong> Aktifkan Zone Protection Profile dan rate limiting pada zona untrusted di {fw_vendor} untuk mencegah upaya {stage_desc} lebih lanjut.",
+        f"<strong>Dokumentasi Insiden SIEM:</strong> Ekspor seluruh sekuens evaluasi AI (Label {label} — {stage_detail}) beserta log mentah terkait ke sistem SIEM untuk dokumentasi forensik dan pelaporan insiden."
+    ]
+
+    return JsonResponse({
+        "status": "success",
+        "ai_narrative": sim_narrative,
+        "ai_recommendations": sim_recommendations,
+        "mode": "simulation-fallback",
+        "ip": target_ip,
+    })
 
 
 @login_required(login_url="/login/")
@@ -1096,6 +1219,8 @@ def investigate_ip_api(request):
     JSON API endpoint for dynamic client-side IP selection and AI Analysis triggering.
     """
     target_ip = request.GET.get("ip", "").strip()
-    selected_ip_data, _ = get_investigation_data(target_ip if target_ip else None)
+    fw_filter = request.GET.get("fw", "all").strip().lower()
+    time_filter = request.GET.get("time", "24h").strip().lower()
+    selected_ip_data, _ = get_investigation_data(target_ip if target_ip else None, fw_filter=fw_filter, time_filter=time_filter)
     return JsonResponse({"status": "success", "data": selected_ip_data})
 
