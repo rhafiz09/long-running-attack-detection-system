@@ -1,0 +1,159 @@
+======================================================================
+  CIC-IDS 2017 Public Dataset Testing - CNN-LSTM Attack Detector
+======================================================================
+
+  Results saved to: D:\Projects\BilCode\ML - Pendeteksi Serangan Long Running Attack\codebase_new\scripts\test_public_dataset_results.txt
+
+[1/3] Loading trained vendor models...
+  Loaded: Palo Alto
+  Loaded: FortiGate
+  Loaded: FortiWAF
+
+[2/3] Running tests with [Palo Alto] model across all 8 CIC-IDS files...
+======================================================================
+
+>>> Dataset: Monday (Normal Only)
+    File   : Monday-WorkingHours.pcap_ISCX.csv
+    Desc   : Benign normal human activities — baseline traffic
+    Flows in file   : 529,481
+    Sequences formed: 930
+    Avg confidence  : 99.4%  (min: 75.6%)
+    Agree w/ FE rule: 100.0%
+    CIC labels (raw)      : {'BENIGN': 529481}
+    True class (mapped)   : {'Normal': 529481}
+    Model predictions     : {'Normal': 930, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 0}
+    FE pseudo-labels      : {'Normal': 930, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 0}
+
+>>> Dataset: Tuesday (Brute Force)
+    File   : Tuesday-WorkingHours.pcap_ISCX.csv
+    Desc   : FTP-Patator (09:20-10:20) + SSH-Patator (14:00-15:00)
+    Flows in file   : 445,645
+    Sequences formed: 974
+    Avg confidence  : 100.0%  (min: 99.2%)
+    Agree w/ FE rule: 88.8%
+    CIC labels (raw)      : {'BENIGN': 431813, 'FTP-Patator': 7935, 'SSH-Patator': 5897}
+    True class (mapped)   : {'Normal': 431813, 'Reconnaissance': 13832}
+    Model predictions     : {'Normal': 880, 'Reconnaissance': 94, 'Lateral Movement': 0, 'Beaconing': 0}
+    FE pseudo-labels      : {'Normal': 959, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 15}
+
+>>> Dataset: Wednesday (DoS/DDoS + Heartbleed)
+    File   : Wednesday-workingHours.pcap_ISCX.csv
+    Desc   : DoS Slowloris, Slowhttptest, Hulk, GoldenEye + Heartbleed
+    Flows in file   : 691,406
+    Sequences formed: 974
+    Avg confidence  : 100.0%  (min: 99.6%)
+    Agree w/ FE rule: 88.3%
+    CIC labels (raw)      : {'BENIGN': 439683, 'DoS Hulk': 230124, 'DoS GoldenEye': 10293, 'DoS slowloris': 5796, 'DoS Slowhttptest': 5499, 'Heartbleed': 11}
+    True class (mapped)   : {'Normal': 439683, 'Reconnaissance': 230135, 'Beaconing': 21588}
+    Model predictions     : {'Normal': 880, 'Reconnaissance': 94, 'Lateral Movement': 0, 'Beaconing': 0}
+    FE pseudo-labels      : {'Normal': 954, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 20}
+
+>>> Dataset: Thursday AM (Web Attacks)
+    File   : Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv
+    Desc   : Web Brute Force + XSS + SQL Injection
+    Flows in file   : 170,231
+    Sequences formed: 974
+    Avg confidence  : 100.0%  (min: 99.2%)
+    Agree w/ FE rule: 87.8%
+    CIC labels (raw)      : {'BENIGN': 168051, 'Web Attack Brute Force': 1507, 'Web Attack XSS': 652, 'Web Attack Sql Injection': 21}
+    True class (mapped)   : {'Normal': 168051, 'Reconnaissance': 2180}
+    Model predictions     : {'Normal': 880, 'Reconnaissance': 94, 'Lateral Movement': 0, 'Beaconing': 0}
+    FE pseudo-labels      : {'Normal': 949, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 25}
+
+>>> Dataset: Thursday PM (Infiltration)
+    File   : Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv
+    Desc   : Dropbox download + Meta exploit + Internal portscan
+    Flows in file   : 288,395
+    Sequences formed: 957
+    Avg confidence  : 99.8%  (min: 92.4%)
+    Agree w/ FE rule: 99.4%
+    CIC labels (raw)      : {'BENIGN': 288359, 'Infiltration': 36}
+    True class (mapped)   : {'Normal': 288359, 'Lateral Movement': 36}
+    Model predictions     : {'Normal': 957, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 0}
+    FE pseudo-labels      : {'Normal': 951, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 6}
+
+>>> Dataset: Friday AM (Botnet)
+    File   : Friday-WorkingHours-Morning.pcap_ISCX.csv
+    Desc   : ARES Botnet beaconing to C2 across multiple victims
+    Flows in file   : 190,911
+    Sequences formed: 1,350
+    Avg confidence  : 100.0%  (min: 99.9%)
+    Agree w/ FE rule: 63.9%
+    CIC labels (raw)      : {'BENIGN': 188955, 'Bot': 1956}
+    True class (mapped)   : {'Normal': 188955, 'Beaconing': 1956}
+    Model predictions     : {'Normal': 882, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 468}
+    FE pseudo-labels      : {'Normal': 1330, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 20}
+
+>>> Dataset: Friday PM PortScan
+    File   : Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv
+    Desc   : Nmap port scan — firewall ON and OFF scenarios
+    Flows in file   : 286,096
+    Sequences formed: 974
+    Avg confidence  : 100.0%  (min: 99.3%)
+    Agree w/ FE rule: 97.2%
+    CIC labels (raw)      : {'PortScan': 158804, 'BENIGN': 127292}
+    True class (mapped)   : {'Reconnaissance': 158804, 'Normal': 127292}
+    Model predictions     : {'Normal': 880, 'Reconnaissance': 94, 'Lateral Movement': 0, 'Beaconing': 0}
+    FE pseudo-labels      : {'Normal': 865, 'Reconnaissance': 88, 'Lateral Movement': 0, 'Beaconing': 21}
+
+>>> Dataset: Friday PM DDoS
+    File   : Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv
+    Desc   : DDoS LOIT attack from 3 Win8.1 machines
+    Flows in file   : 225,711
+    Sequences formed: 974
+    Avg confidence  : 100.0%  (min: 89.0%)
+    Agree w/ FE rule: 87.9%
+    CIC labels (raw)      : {'DDoS': 128025, 'BENIGN': 97686}
+    True class (mapped)   : {'Reconnaissance': 128025, 'Normal': 97686}
+    Model predictions     : {'Normal': 880, 'Reconnaissance': 94, 'Lateral Movement': 0, 'Beaconing': 0}
+    FE pseudo-labels      : {'Normal': 950, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 24}
+
+======================================================================
+[3/3] Cross-Vendor Comparison on Friday PortScan (most attack-heavy)
+======================================================================
+
+  Vendor: Palo Alto
+    Flows in file   : 286,096
+    Sequences formed: 974
+    Avg confidence  : 100.0%  (min: 99.3%)
+    Agree w/ FE rule: 97.2%
+    CIC labels (raw)      : {'PortScan': 158804, 'BENIGN': 127292}
+    True class (mapped)   : {'Reconnaissance': 158804, 'Normal': 127292}
+    Model predictions     : {'Normal': 880, 'Reconnaissance': 94, 'Lateral Movement': 0, 'Beaconing': 0}
+    FE pseudo-labels      : {'Normal': 865, 'Reconnaissance': 88, 'Lateral Movement': 0, 'Beaconing': 21}
+
+  Vendor: FortiGate
+    Flows in file   : 286,096
+    Sequences formed: 974
+    Avg confidence  : 99.9%  (min: 59.5%)
+    Agree w/ FE rule: 97.2%
+    CIC labels (raw)      : {'PortScan': 158804, 'BENIGN': 127292}
+    True class (mapped)   : {'Reconnaissance': 158804, 'Normal': 127292}
+    Model predictions     : {'Normal': 880, 'Reconnaissance': 94, 'Lateral Movement': 0, 'Beaconing': 0}
+    FE pseudo-labels      : {'Normal': 865, 'Reconnaissance': 88, 'Lateral Movement': 0, 'Beaconing': 21}
+
+  Vendor: FortiWAF
+    Flows in file   : 286,096
+    Sequences formed: 974
+    Avg confidence  : 100.0%  (min: 91.2%)
+    Agree w/ FE rule: 97.2%
+    CIC labels (raw)      : {'PortScan': 158804, 'BENIGN': 127292}
+    True class (mapped)   : {'Reconnaissance': 158804, 'Normal': 127292}
+    Model predictions     : {'Normal': 880, 'Reconnaissance': 94, 'Lateral Movement': 0, 'Beaconing': 0}
+    FE pseudo-labels      : {'Normal': 865, 'Reconnaissance': 88, 'Lateral Movement': 0, 'Beaconing': 21}
+
+======================================================================
+SUMMARY TABLE - Palo Alto model across all datasets
+======================================================================
+Dataset                              Sequences   Confidence   FE Agree
+----------------------------------------------------------------------
+Monday (Normal Only)                       930       99.4%     100.0%
+Tuesday (Brute Force)                      974      100.0%      88.8%
+Wednesday (DoS/DDoS + Heartbleed)          974      100.0%      88.3%
+Thursday AM (Web Attacks)                  974      100.0%      87.8%
+Thursday PM (Infiltration)                 957       99.8%      99.4%
+Friday AM (Botnet)                       1,350      100.0%      63.9%
+Friday PM PortScan                         974      100.0%      97.2%
+Friday PM DDoS                             974      100.0%      87.9%
+
+[DONE] Public dataset testing completed.

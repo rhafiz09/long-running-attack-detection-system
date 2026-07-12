@@ -1,0 +1,114 @@
+======================================================================
+  Real-World Firewall Log Evaluation — CNN-LSTM Attack Detector
+  File: D:\Projects\BilCode\ML - Pendeteksi Serangan Long Running Attack\codebase_new\datasets\raw\firewall_log.csv
+======================================================================
+
+======================================================================
+  VENDOR: Palo Alto (Server Utama)
+======================================================================
+  Loaded 50,000 rows for [Palo Alto (Server Utama)]
+
+  Raw logs loaded      : 50,000
+  Behavior windows     : 15,747
+  3D Sequences formed  : 12,844
+  Lateral-eligible win : 0  (Internal->Internal, unique_ips>3)
+
+  FE Pseudo-label dist  : {'Normal': 12843, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 1}
+  Model Prediction dist : {'Normal': 4, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 12840}
+
+  Accuracy vs FE pseudo-labels : 0.0004 (0.04%)
+  Avg Confidence               : 99.8%  (min: 50.6%)
+
+  Classification Report:
+                  precision    recall  f1-score   support
+    
+          Normal       1.00      0.00      0.00     12843
+       Beaconing       0.00      1.00      0.00         1
+    
+        accuracy                           0.00     12844
+       macro avg       0.50      0.50      0.00     12844
+    weighted avg       1.00      0.00      0.00     12844
+    
+
+  Confusion Matrix (classes: ['Normal', 'Beaconing']):
+    [    4 12839]
+    [0 1]
+
+======================================================================
+  VENDOR: FortiGate (Kantor Cabang)
+======================================================================
+  Loaded 50,000 rows for [FortiGate (Kantor Cabang)]
+
+  Raw logs loaded      : 50,000
+  Behavior windows     : 3,754
+  3D Sequences formed  : 2,065
+  Lateral-eligible win : 0  (Internal->Internal, unique_ips>3)
+
+  FE Pseudo-label dist  : {'Normal': 1733, 'Reconnaissance': 0, 'Lateral Movement': 252, 'Beaconing': 80}
+  Model Prediction dist : {'Normal': 0, 'Reconnaissance': 86, 'Lateral Movement': 50, 'Beaconing': 1929}
+
+  Accuracy vs FE pseudo-labels : 0.0630 (6.30%)
+  Avg Confidence               : 99.1%  (min: 49.8%)
+
+  Classification Report:
+                      precision    recall  f1-score   support
+    
+              Normal       0.00      0.00      0.00      1733
+      Reconnaissance       0.00      0.00      0.00         0
+    Lateral Movement       1.00      0.20      0.33       252
+           Beaconing       0.04      1.00      0.08        80
+    
+            accuracy                           0.06      2065
+           macro avg       0.26      0.30      0.10      2065
+        weighted avg       0.12      0.06      0.04      2065
+    
+
+  Confusion Matrix (classes: ['Normal', 'Reconnaissance', 'Lateral Movement', 'Beaconing']):
+    [   0   86    0 1647]
+    [0 0 0 0]
+    [  0   0  50 202]
+    [ 0  0  0 80]
+
+======================================================================
+  VENDOR: FortiWAF (Aplikasi Web)
+======================================================================
+  Loaded 32,332 rows for [FortiWAF (Aplikasi Web)]
+
+  Raw logs loaded      : 32,332
+  Behavior windows     : 2,766
+  3D Sequences formed  : 1,864
+  Lateral-eligible win : 0  (Internal->Internal, unique_ips>3)
+
+  FE Pseudo-label dist  : {'Normal': 1739, 'Reconnaissance': 0, 'Lateral Movement': 86, 'Beaconing': 39}
+  Model Prediction dist : {'Normal': 0, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 1864}
+
+  Accuracy vs FE pseudo-labels : 0.0209 (2.09%)
+  Avg Confidence               : 99.8%  (min: 77.6%)
+
+  Classification Report:
+                      precision    recall  f1-score   support
+    
+              Normal       0.00      0.00      0.00      1739
+    Lateral Movement       0.00      0.00      0.00        86
+           Beaconing       0.02      1.00      0.04        39
+    
+            accuracy                           0.02      1864
+           macro avg       0.01      0.33      0.01      1864
+        weighted avg       0.00      0.02      0.00      1864
+    
+
+  Confusion Matrix (classes: ['Normal', 'Lateral Movement', 'Beaconing']):
+    [   0    0 1739]
+    [ 0  0 86]
+    [ 0  0 39]
+
+======================================================================
+  SUMMARY TABLE
+======================================================================
+Vendor                             Rows   Windows    Seqs      Acc     Conf
+----------------------------------------------------------------------
+Palo Alto (Server Utama)         50,000    15,747  12,844   0.04%   99.8%
+FortiGate (Kantor Cabang)        50,000     3,754   2,065   6.30%   99.1%
+FortiWAF (Aplikasi Web)          32,332     2,766   1,864   2.09%   99.8%
+
+[DONE] Results saved to: D:\Projects\BilCode\ML - Pendeteksi Serangan Long Running Attack\codebase_new\scripts\raw_log_eval_results.txt

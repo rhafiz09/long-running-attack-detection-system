@@ -1,0 +1,114 @@
+﻿python : WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+At line:1 char:1
++ python scripts/test_public_dataset.py 2>&1 | Out-File -Encoding UTF8  ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (WARNING: All lo...itten to STDERR:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+I0000 00:00:1783833080.218626   22872 port.cc:153] oneDNN custom operations are on. You may see slightly different 
+numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the 
+environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1783833082.253376   22872 port.cc:153] oneDNN custom operations are on. You may see slightly different 
+numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the 
+environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+I0000 00:00:1783833082.821682   22872 cpu_feature_guard.cc:227] This TensorFlow binary is optimized to use available 
+CPU instructions in performance-critical operations.
+To enable the following instructions: SSE3 SSE4.1 SSE4.2 AVX AVX2 AVX_VNNI FMA, in other operations, rebuild 
+TensorFlow with the appropriate compiler flags.
+WARNING:tensorflow:TensorFlow GPU support is not available on native Windows for TensorFlow >= 2.11. Even if 
+CUDA/cuDNN are installed, GPU will not be used. Please use WSL2 or the TensorFlow-DirectML plugin.
+WARNING:tensorflow:TensorFlow GPU support is not available on native Windows for TensorFlow >= 2.11. Even if 
+CUDA/cuDNN are installed, GPU will not be used. Please use WSL2 or the TensorFlow-DirectML plugin.
+D:\Projects\BilCode\ML - Pendeteksi Serangan Long Running Attack\codebase_new\scripts\test_public_dataset.py:174: 
+DeprecationWarning: DataFrameGroupBy.apply operated on the grouping columns. This behavior is deprecated, and in a 
+future version of pandas the grouping columns will be excluded from the operation. Either pass `include_groups=False` 
+to exclude the groupings or explicitly select the grouping columns after groupby to silence this warning.
+  df = df.groupby("Label", group_keys=False).apply(
+D:\Projects\BilCode\ML - Pendeteksi Serangan Long Running Attack\codebase_new\scripts\test_public_dataset.py:174: 
+DeprecationWarning: DataFrameGroupBy.apply operated on the grouping columns. This behavior is deprecated, and in a 
+future version of pandas the grouping columns will be excluded from the operation. Either pass `include_groups=False` 
+to exclude the groupings or explicitly select the grouping columns after groupby to silence this warning.
+  df = df.groupby("Label", group_keys=False).apply(
+D:\Projects\BilCode\ML - Pendeteksi Serangan Long Running Attack\codebase_new\scripts\test_public_dataset.py:174: 
+DeprecationWarning: DataFrameGroupBy.apply operated on the grouping columns. This behavior is deprecated, and in a 
+future version of pandas the grouping columns will be excluded from the operation. Either pass `include_groups=False` 
+to exclude the groupings or explicitly select the grouping columns after groupby to silence this warning.
+  df = df.groupby("Label", group_keys=False).apply(
+D:\Projects\BilCode\ML - Pendeteksi Serangan Long Running Attack\codebase_new\scripts\test_public_dataset.py:174: 
+DeprecationWarning: DataFrameGroupBy.apply operated on the grouping columns. This behavior is deprecated, and in a 
+future version of pandas the grouping columns will be excluded from the operation. Either pass `include_groups=False` 
+to exclude the groupings or explicitly select the grouping columns after groupby to silence this warning.
+  df = df.groupby("Label", group_keys=False).apply(
+======================================================================
+  CIC-IDS 2017 Public Dataset Testing ù CNN-LSTM Attack Detector
+======================================================================
+
+[1/3] Loading trained vendor models...
+  Loaded: Palo Alto
+  Loaded: FortiGate
+  Loaded: FortiWAF
+
+[2/3] Running tests with [Palo Alto] model across all 8 CIC-IDS files...
+======================================================================
+
+>>> Dataset: Monday (Normal Only)
+    File   : Monday-WorkingHours.pcap_ISCX.csv
+    Desc   : Benign normal human activities ù baseline traffic
+    Flows in file   : 529,481
+    Sequences formed: 930
+    Avg confidence  : 99.4%  (min: 53.2%)
+    Agree w/ FE rule: 100.0%
+    CIC ground truth (raw): {'BENIGN': 529481}
+    True class (mapped)   : {'Normal': 529481}
+    Model predictions     : {'Normal': 930, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 0}
+    FE pseudo-labels      : {'Normal': 930, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 0}
+
+>>> Dataset: Tuesday (Brute Force)
+    File   : Tuesday-WorkingHours.pcap_ISCX.csv
+    Desc   : FTP-Patator (09:20-10:20) + SSH-Patator (14:00-15:00)
+    Flows in file   : 445,645
+    Sequences formed: 941
+    Avg confidence  : 99.8%  (min: 91.3%)
+    Agree w/ FE rule: 98.8%
+    CIC ground truth (raw): {'BENIGN': 431813, 'FTP-Patator': 7935, 'SSH-Patator': 5897}
+    True class (mapped)   : {'Normal': 431813, 'Reconnaissance': 13832}
+    Model predictions     : {'Normal': 930, 'Reconnaissance': 11, 'Lateral Movement': 0, 'Beaconing': 0}
+    FE pseudo-labels      : {'Normal': 941, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 0}
+
+>>> Dataset: Wednesday (DoS/DDoS + Heartbleed)
+    File   : Wednesday-workingHours.pcap_ISCX.csv
+    Desc   : DoS Slowloris, Slowhttptest, Hulk, GoldenEye + Heartbleed
+    Flows in file   : 691,406
+    Sequences formed: 1,024
+    Avg confidence  : 100.0%  (min: 99.7%)
+    Agree w/ FE rule: 90.8%
+    CIC ground truth (raw): {'BENIGN': 439683, 'DoS Hulk': 230124, 'DoS GoldenEye': 10293, 'DoS slowloris': 5796, 'DoS Slowhttptest': 5499, 'Heartbleed': 11}
+    True class (mapped)   : {'Normal': 439683, 'Reconnaissance': 230135, 'Beaconing': 21588}
+    Model predictions     : {'Normal': 930, 'Reconnaissance': 94, 'Lateral Movement': 0, 'Beaconing': 0}
+    FE pseudo-labels      : {'Normal': 1024, 'Reconnaissance': 0, 'Lateral Movement': 0, 'Beaconing': 0}
+
+>>> Dataset: Thursday AM (Web Attacks)
+    File   : Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv
+    Desc   : Web Brute Force + XSS + SQL Injection
+    Flows in file   : 170,231
+    Sequences formed: 934
+    Avg confidence  : 99.6%  (min: 84.2%)
+    Agree w/ FE rule: 99.7%
+Traceback (most recent call last):
+  File "D:\Projects\BilCode\ML - Pendeteksi Serangan Long Running Attack\codebase_new\scripts\test_public_dataset.py", 
+line 441, in <module>
+    main()
+    ~~~~^^
+  File "D:\Projects\BilCode\ML - Pendeteksi Serangan Long Running Attack\codebase_new\scripts\test_public_dataset.py", 
+line 411, in main
+    print_result(result)
+    ~~~~~~~~~~~~^^^^^^^^
+  File "D:\Projects\BilCode\ML - Pendeteksi Serangan Long Running Attack\codebase_new\scripts\test_public_dataset.py", 
+line 371, in print_result
+    print(f"    CIC ground truth (raw): {r['cic_label_distribution']}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\bin\python\python-3.13\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\ufffd' in position 59: character maps to <undefined>

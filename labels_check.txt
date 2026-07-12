@@ -1,0 +1,17 @@
+﻿Thursday_AM: total=170,366
+  BENIGN: 168,186
+  Web Attack ´┐¢ Brute Force: 1,507
+  Web Attack ´┐¢ XSS: 652
+  Web Attack ´┐¢ Sql Injection: 21
+Thursday_PM: total=288,602
+  BENIGN: 288,566
+  Infiltration: 36
+Friday_AM: total=191,033
+  BENIGN: 189,067
+  Bot: 1,966
+Friday_PS: total=286,467
+  PortScan: 158,930
+  BENIGN: 127,537
+Friday_DD: total=225,745
+  DDoS: 128,027
+  BENIGN: 97,718
