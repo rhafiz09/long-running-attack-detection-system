@@ -483,23 +483,22 @@
         document.getElementById("editEmail").value = email;
         document.getElementById("editRole").value = role;
 
-        const currentUserId = {{ user.id }
-    };
-    const editRoleSelect = document.getElementById("editRole");
-    const warning = document.getElementById("editSelfWarning");
+        const currentUserId = `${userId}`;
+        const editRoleSelect = document.getElementById("editRole");
+        const warning = document.getElementById("editSelfWarning");
 
-    if (userId === currentUserId) {
-        editRoleSelect.disabled = true;
-        warning.classList.remove("hidden");
-    } else {
-        editRoleSelect.disabled = false;
-        warning.classList.add("hidden");
-    }
+        if (userId === currentUserId) {
+            editRoleSelect.disabled = true;
+            warning.classList.remove("hidden");
+        } else {
+            editRoleSelect.disabled = false;
+            warning.classList.add("hidden");
+        }
 
-    const form = document.getElementById("editUserForm");
-    form.action = `/users/${userId}/update/`;
+        const form = document.getElementById("editUserForm");
+        form.action = `/users/${userId}/update/`;
 
-    showModal("editUserModal");
+        showModal("editUserModal");
     }
     function closeEditUserModal() {
         hideModal("editUserModal");

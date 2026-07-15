@@ -36,9 +36,6 @@ except ImportError:
 
 
 def login_view(request):
-    """
-    Custom login view rendering a glassmorphic cyber-SOC authentication form.
-    """
     if request.user.is_authenticated:
         return redirect("dashboard")
 
@@ -58,9 +55,6 @@ def login_view(request):
 
 
 def logout_view(request):
-    """
-    Logs out the user and redirects to the login screen.
-    """
     logout(request)
     messages.info(request, "Anda telah berhasil logout dari sesi pemantauan SOC.")
     return redirect("login")

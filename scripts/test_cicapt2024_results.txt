@@ -1,0 +1,147 @@
+===========================================================================
+  CICAPT-IIoT2024 Advanced Persistent Threat Testing — CNN-LSTM Detector
+===========================================================================
+Dataset : CICAPT-IIoT2024 (University of New Brunswick, 2024)
+Adapter : Direct chronological timestamp (ts -> log_date) + Private Zone mapping
+===========================================================================
+
+[PRE-PROCESSING] Extracting 100,000 Baseline Normal records from phase1_NetworkData.csv (Vectorized)...
+  -> Extracted 100,000 Phase 0 logs across 11 unique source IPs.
+
+[PRE-PROCESSING] Extracting Phase 1, 2, and 3 attack records from phase2_NetworkData.csv (up to 100,000 per phase - Vectorized)...
+  Processed 0 rows of phase2_NetworkData.csv... Extracted: [Phase 1=100,000, Phase 2=10,591, Phase 3=100,000]
+  Processed 1,000,000 rows of phase2_NetworkData.csv... Extracted: [Phase 1=100,000, Phase 2=10,591, Phase 3=100,000]
+  Processed 2,000,000 rows of phase2_NetworkData.csv... Extracted: [Phase 1=100,000, Phase 2=10,591, Phase 3=100,000]
+  Processed 3,000,000 rows of phase2_NetworkData.csv... Extracted: [Phase 1=100,000, Phase 2=10,591, Phase 3=100,000]
+  Processed 4,000,000 rows of phase2_NetworkData.csv... Extracted: [Phase 1=100,000, Phase 2=10,591, Phase 3=100,000]
+  Processed 5,000,000 rows of phase2_NetworkData.csv... Extracted: [Phase 1=100,000, Phase 2=100,000, Phase 3=100,000]
+  -> Extracted 100,000 logs for all 3 attack phases! Breaking early.
+
+[PALO ALTO MODEL EVALUATION]
+
+  ---> Testing: Phase 0: Baseline Normal Traffic
+       Expected Ground Truth Class: 0 (Pure baseline normal traffic before APT initial compromise)
+    Logs evaluated     : 100,000
+    Behavior windows   : 83
+    3D Sequences formed: 61
+    Average confidence : 99.1%
+    FE Rule Agreement  : 29.5%
+    Model Predictions  : {'Normal (0)': 9, 'Recon (1)': 33, 'Lateral (2)': 0, 'Beaconing (3)': 19}
+    FE Heuristic Rules : {'Normal (0)': 52, 'Recon (1)': 9, 'Lateral (2)': 0, 'Beaconing (3)': 0}
+
+  ---> Testing: Phase 1: Internal Reconnaissance (Discovery TA0007)
+       Expected Ground Truth Class: 1 (TA0007 Discovery: find local users, network interface config, wifi scan, OS listing)
+    Logs evaluated     : 100,000
+    Behavior windows   : 77
+    3D Sequences formed: 57
+    Average confidence : 99.0%
+    FE Rule Agreement  : 28.1%
+    Model Predictions  : {'Normal (0)': 8, 'Recon (1)': 32, 'Lateral (2)': 0, 'Beaconing (3)': 17}
+    FE Heuristic Rules : {'Normal (0)': 48, 'Recon (1)': 8, 'Lateral (2)': 1, 'Beaconing (3)': 0}
+
+  ---> Testing: Phase 2: Lateral Movement (Sandcat Pivoting across LAN)
+       Expected Ground Truth Class: 2 (Lateral movement: starting Sandcat and internal pivoting across Trust zones)
+    Logs evaluated     : 100,000
+    Behavior windows   : 79
+    3D Sequences formed: 58
+    Average confidence : 97.6%
+    FE Rule Agreement  : 27.6%
+    Model Predictions  : {'Normal (0)': 8, 'Recon (1)': 41, 'Lateral (2)': 0, 'Beaconing (3)': 9}
+    FE Heuristic Rules : {'Normal (0)': 30, 'Recon (1)': 8, 'Lateral (2)': 20, 'Beaconing (3)': 0}
+
+  ---> Testing: Phase 3: Command & Control (C2 Beaconing)
+       Expected Ground Truth Class: 3 (C2 Beaconing: downloading payloads, regular heartbeats, and external tasking)
+    Logs evaluated     : 100,000
+    Behavior windows   : 74
+    3D Sequences formed: 54
+    Average confidence : 99.0%
+    FE Rule Agreement  : 27.8%
+    Model Predictions  : {'Normal (0)': 7, 'Recon (1)': 32, 'Lateral (2)': 0, 'Beaconing (3)': 15}
+    FE Heuristic Rules : {'Normal (0)': 45, 'Recon (1)': 8, 'Lateral (2)': 1, 'Beaconing (3)': 0}
+
+[FORTIGATE MODEL EVALUATION]
+
+  ---> Testing: Phase 0: Baseline Normal Traffic
+       Expected Ground Truth Class: 0 (Pure baseline normal traffic before APT initial compromise)
+    Logs evaluated     : 100,000
+    Behavior windows   : 83
+    3D Sequences formed: 61
+    Average confidence : 94.7%
+    FE Rule Agreement  : 18.0%
+    Model Predictions  : {'Normal (0)': 2, 'Recon (1)': 50, 'Lateral (2)': 0, 'Beaconing (3)': 9}
+    FE Heuristic Rules : {'Normal (0)': 52, 'Recon (1)': 9, 'Lateral (2)': 0, 'Beaconing (3)': 0}
+
+  ---> Testing: Phase 1: Internal Reconnaissance (Discovery TA0007)
+       Expected Ground Truth Class: 1 (TA0007 Discovery: find local users, network interface config, wifi scan, OS listing)
+    Logs evaluated     : 100,000
+    Behavior windows   : 77
+    3D Sequences formed: 57
+    Average confidence : 96.8%
+    FE Rule Agreement  : 15.8%
+    Model Predictions  : {'Normal (0)': 1, 'Recon (1)': 47, 'Lateral (2)': 0, 'Beaconing (3)': 9}
+    FE Heuristic Rules : {'Normal (0)': 48, 'Recon (1)': 8, 'Lateral (2)': 1, 'Beaconing (3)': 0}
+
+  ---> Testing: Phase 2: Lateral Movement (Sandcat Pivoting across LAN)
+       Expected Ground Truth Class: 2 (Lateral movement: starting Sandcat and internal pivoting across Trust zones)
+    Logs evaluated     : 100,000
+    Behavior windows   : 79
+    3D Sequences formed: 58
+    Average confidence : 97.5%
+    FE Rule Agreement  : 17.2%
+    Model Predictions  : {'Normal (0)': 2, 'Recon (1)': 47, 'Lateral (2)': 0, 'Beaconing (3)': 9}
+    FE Heuristic Rules : {'Normal (0)': 30, 'Recon (1)': 8, 'Lateral (2)': 20, 'Beaconing (3)': 0}
+
+  ---> Testing: Phase 3: Command & Control (C2 Beaconing)
+       Expected Ground Truth Class: 3 (C2 Beaconing: downloading payloads, regular heartbeats, and external tasking)
+    Logs evaluated     : 100,000
+    Behavior windows   : 74
+    3D Sequences formed: 54
+    Average confidence : 96.7%
+    FE Rule Agreement  : 16.7%
+    Model Predictions  : {'Normal (0)': 1, 'Recon (1)': 45, 'Lateral (2)': 0, 'Beaconing (3)': 8}
+    FE Heuristic Rules : {'Normal (0)': 45, 'Recon (1)': 8, 'Lateral (2)': 1, 'Beaconing (3)': 0}
+
+[FORTIWAF MODEL EVALUATION]
+
+  ---> Testing: Phase 0: Baseline Normal Traffic
+       Expected Ground Truth Class: 0 (Pure baseline normal traffic before APT initial compromise)
+    Logs evaluated     : 100,000
+    Behavior windows   : 83
+    3D Sequences formed: 61
+    Average confidence : 96.0%
+    FE Rule Agreement  : 18.0%
+    Model Predictions  : {'Normal (0)': 2, 'Recon (1)': 40, 'Lateral (2)': 0, 'Beaconing (3)': 19}
+    FE Heuristic Rules : {'Normal (0)': 52, 'Recon (1)': 9, 'Lateral (2)': 0, 'Beaconing (3)': 0}
+
+  ---> Testing: Phase 1: Internal Reconnaissance (Discovery TA0007)
+       Expected Ground Truth Class: 1 (TA0007 Discovery: find local users, network interface config, wifi scan, OS listing)
+    Logs evaluated     : 100,000
+    Behavior windows   : 77
+    3D Sequences formed: 57
+    Average confidence : 94.5%
+    FE Rule Agreement  : 17.5%
+    Model Predictions  : {'Normal (0)': 2, 'Recon (1)': 38, 'Lateral (2)': 0, 'Beaconing (3)': 17}
+    FE Heuristic Rules : {'Normal (0)': 48, 'Recon (1)': 8, 'Lateral (2)': 1, 'Beaconing (3)': 0}
+
+  ---> Testing: Phase 2: Lateral Movement (Sandcat Pivoting across LAN)
+       Expected Ground Truth Class: 2 (Lateral movement: starting Sandcat and internal pivoting across Trust zones)
+    Logs evaluated     : 100,000
+    Behavior windows   : 79
+    3D Sequences formed: 58
+    Average confidence : 97.9%
+    FE Rule Agreement  : 17.2%
+    Model Predictions  : {'Normal (0)': 2, 'Recon (1)': 47, 'Lateral (2)': 0, 'Beaconing (3)': 9}
+    FE Heuristic Rules : {'Normal (0)': 30, 'Recon (1)': 8, 'Lateral (2)': 20, 'Beaconing (3)': 0}
+
+  ---> Testing: Phase 3: Command & Control (C2 Beaconing)
+       Expected Ground Truth Class: 3 (C2 Beaconing: downloading payloads, regular heartbeats, and external tasking)
+    Logs evaluated     : 100,000
+    Behavior windows   : 74
+    3D Sequences formed: 54
+    Average confidence : 94.4%
+    FE Rule Agreement  : 18.5%
+    Model Predictions  : {'Normal (0)': 2, 'Recon (1)': 37, 'Lateral (2)': 0, 'Beaconing (3)': 15}
+    FE Heuristic Rules : {'Normal (0)': 45, 'Recon (1)': 8, 'Lateral (2)': 1, 'Beaconing (3)': 0}
+
+===========================================================================
+Testing Completed. Results saved to scripts/test_cicapt2024_results.txt
