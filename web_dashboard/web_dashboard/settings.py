@@ -107,5 +107,20 @@ LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/login/"
 
+# ==========================================
+# 🔒 CYBERSECURITY & SESSION HARDENING
+# ==========================================
+# Session Timeout Management (Section 4.7 & SOC Hardening)
+SESSION_COOKIE_AGE = int(os.getenv("SESSION_COOKIE_AGE", 3600))  # 3600s = 1 hour inactivity timeout
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True                           # Session terminates immediately when browser closes
+SESSION_COOKIE_HTTPONLY = True                                   # Prevents XSS JavaScript access to session cookie
+SESSION_COOKIE_SAMESITE = "Lax"                                  # Mitigates CSRF attack vectors
+
+# HTTPS Communication & Security Headers Hardening
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")    # Support Nginx/Docker SSL termination proxy
+SESSION_COOKIE_SECURE = not DEBUG                                # Transmit session cookies via HTTPS only in production
+CSRF_COOKIE_SECURE = not DEBUG                                   # Transmit CSRF cookies via HTTPS only in production
+SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "False").lower() in ("true", "1", "t")
+
 # Default primary key field type
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
